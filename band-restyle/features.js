@@ -176,6 +176,20 @@
     setTimeout(function () { t.remove(); }, 3100);
   }
 
+  // Смайлик приветствия: по времени суток, теме и дню недели; держится до смены времени суток.
+  var EMOJI_TIME = { night: ["🌌", "🌙", "⭐", "😴"], morning: ["☀️", "🌅", "☕", "🥐", "🌤️"], day: ["✨", "🌤️", "🍀", "💫", "🌸"], evening: ["🌙", "🌆", "🍵", "✨", "🌇"] };
+  var EMOJI_THEME = { vice: ["🌴", "😎", "🌅", "🕶️"], halloween: ["🎃", "👻", "🦇", "🕸️"], sage: ["🌿", "🍃"], powder: ["🌷", "🎀"], lavender: ["💜", "🪻"], cloud: ["☁️", "🫧"] };
+  function greetEmoji(theme) {
+    var d = new Date(), h = d.getHours();
+    var period = h < 5 ? "night" : h < 12 ? "morning" : h < 18 ? "day" : "evening";
+    var pool = EMOJI_TIME[period].concat(EMOJI_THEME[theme] || [], EMOJI_THEME[theme] || []);
+    if (d.getDay() === 5) pool = pool.concat(["🎉", "🥳"]);
+    if (d.getDay() === 1 && period === "morning") pool = pool.concat(["💪", "☕"]);
+    var key = d.toDateString() + period, n = 0;
+    for (var i = 0; i < key.length; i++) n = (n * 31 + key.charCodeAt(i)) | 0;
+    return pool[Math.abs(n) % pool.length];
+  }
+
   // ---------- Баннер ----------
   var hero = null;
 
@@ -202,7 +216,7 @@
     me().then(function (u) {
       var name = (settings.greetingName || "").trim() || (u && (u.first_name || u.nickname || u.username)) || "";
       var h = new Date().getHours();
-      var hello = (h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер") + (name ? ", " + name : "") + " ✨";
+      var hello = (h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер") + (name ? ", " + name : "") + " " + greetEmoji(settings.theme);
       setText(hero.querySelector(".brs-hello"), hello);
     }).catch(function () { setText(hero.querySelector(".brs-hello"), "Привет ✨"); });
     var now = new Date();
@@ -321,6 +335,44 @@
     }
   }
 
+  // ---------- Звуки уведомлений ----------
+  var lastSound = 0, customSounds = [];
+
+  function soundUrl(id) {
+    if (!id || id === "none") return null;
+    var c = customSounds.filter(function (x) { return x.id === id; })[0];
+    if (c) return c.data;
+    return R.SOUNDS[id] ? chrome.runtime.getURL("sounds/" + id + ".wav") : null;
+  }
+
+  // Упоминание (тебя, @all/@channel/@here), личное сообщение или сообщение в канале («@автор: текст»).
+  function kindOf(n) {
+    var body = n.body || "", me = cache.me;
+    var mentioned = /@(all|channel|here)\b/i.test(body) || !!(me && me.username && body.toLowerCase().indexOf("@" + me.username.toLowerCase()) >= 0);
+    if (mentioned) return "mention";
+    return /^@[\w.\-]+: /.test(body) ? "other" : "dm";
+  }
+
+  window.addEventListener("brs-notify", function (e) {
+    if (settings.soundsOn === false) return;
+    var n = {};
+    try { n = typeof e.detail === "string" ? JSON.parse(e.detail) : (e.detail || {}); } catch (x) { /* ignore */ }
+    var kind = kindOf(n);
+    var id = kind === "mention" ? settings.soundMention : kind === "dm" ? settings.soundDM : settings.soundOther;
+    var url = soundUrl(id);
+    if (!url || Date.now() - lastSound < 800) return;
+    lastSound = Date.now();
+    try {
+      var a = new Audio(url);
+      a.volume = Math.max(0, Math.min(1, (+settings.soundVolume || 70) / 100));
+      a.play().catch(function () { /* браузер может не дать играть до первого клика по странице */ });
+    } catch (x) { /* ignore */ }
+  });
+
+  function applyMute() {
+    document.documentElement.setAttribute("data-brs-mute-band", settings.soundsOn !== false && settings.muteBand !== false ? "1" : "0");
+  }
+
   // ---------- Позиционирование над окном чата ----------
   // Правая панель Band (если открыта обычным образом и стоит поверх или рядом) — баннер и заметка не должны под неё заходить.
   function rhsLeft() {
@@ -400,9 +452,12 @@
   // ---------- Запуск ----------
   function load() {
     chrome.storage.sync.get(R.DEFAULTS, function (s) {
-      chrome.storage.local.get({ images: [], notes: {} }, function (local) {
+      chrome.storage.local.get({ images: [], notes: {}, sounds: [] }, function (local) {
         settings = s;
         notes = local.notes || {};
+        customSounds = local.sounds || [];
+        applyMute();
+        me().catch(function () { /* имя нужно, чтобы узнавать упоминания */ });
         var img = s.heroImage && s.heroImage !== "theme" && s.heroImage !== "none" &&
           (local.images || []).filter(function (i) { return i.id === s.heroImage; })[0];
         var th = R.themeFor(s) || R.THEMES.vice;

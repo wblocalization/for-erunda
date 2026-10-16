@@ -64,6 +64,27 @@
       <p class="sub">Эмодзи: hamburger 🍔 · coffee ☕ · pizza 🍕 · headphones 🎧 · calendar 📅 · house 🏠 · car 🚗 · dart 🎯 · computer 💻 · rocket 🚀 · palm_tree 🌴 · sleeping 😴 · thermometer_face 🤒. Минуты: пусто — до конца дня, <code>навсегда</code> (или <code>0</code>) — без срока, пока не сбросишь.</p>
     </div>
 
+    <h2>Звуки уведомлений</h2>
+    <div class="toggles">
+      <label><input type="checkbox" data-key="soundsOn"> Свои звуки уведомлений</label>
+      <label><input type="checkbox" data-key="muteBand"> Заглушать стандартный звук Band (чтобы не звенело дважды)</label>
+    </div>
+    <div id="soundWrap">
+      <div class="sounds">
+        <label>На упоминание меня <span><select id="soundMention"></select><button class="play" data-for="soundMention" title="Прослушать">▶</button></span></label>
+        <label>Личное сообщение <span><select id="soundDM"></select><button class="play" data-for="soundDM" title="Прослушать">▶</button></span></label>
+        <label>Сообщение в канале <span><select id="soundOther"></select><button class="play" data-for="soundOther" title="Прослушать">▶</button></span></label>
+      </div>
+      <div class="sliders">
+        <label>Громкость <input id="soundVolume" type="range" min="5" max="100" step="5"></label>
+      </div>
+      <p class="sub">Свои звуки (mp3, wav, ogg, до 1,5 МБ):</p>
+      <div id="customSounds" class="soundList"></div>
+      <button id="soundUpload">+ Загрузить свой звук</button>
+      <input id="soundFile" type="file" accept="audio/*" hidden>
+      <p class="sub">Звук играет, когда Band показывает уведомление (обычно — когда окно не в фокусе или сообщение в другом канале). Уведомления Band должны быть включены и разрешены браузеру.</p>
+    </div>
+
     <h2>Боковая панель</h2>
     <div id="sidebarTones" class="seg3"></div>
 

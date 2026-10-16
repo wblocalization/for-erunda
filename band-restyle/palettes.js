@@ -89,7 +89,7 @@
     sidebarTone: "dark", chatOpacity: 90, radius: 18, headerText: "white", headerTextColor: "#FFFFFF",
     accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto",
     hero: true, heroHeight: 170, heroImage: "theme", heroPos: 40, heroCollapsed: false, greetingName: "",
-    digest: true, statuses: true, notes: true, readMarks: true, readersPopup: true, heroText: "white", heroTextColor: "#FFFFFF", noteStyle: "theme",
+    digest: true, statuses: true, notes: true, readMarks: true, readersPopup: true, soundsOn: true, muteBand: true, soundVolume: 70, soundMention: "bell", soundDM: "bubble", soundOther: "none", heroText: "white", heroTextColor: "#FFFFFF", noteStyle: "theme",
     statusPresets: "hamburger | Обед | 60\nheadphones | На созвоне | 60\nhouse | Не за компом | 30\ndart | Фокус, пишите позже | 120"
   };
 
@@ -412,5 +412,11 @@
     return css.join("\n");
   }
 
-  root.BAND_RESTYLE = { THEMES: THEMES, FONTS: FONTS, DISPLAY_FONTS: DISPLAY_FONTS, displayFontFor: displayFontFor, DEFAULTS: DEFAULTS, buildCss: buildCss, themeFor: themeFor, mix: mix, rgba: rgba };
+  var SOUNDS = {
+    none: { name: "Тишина" }, bell: { name: "Колокольчик 🔔" }, bubble: { name: "Пузырёк 🫧" }, xylophone: { name: "Ксилофон 🎵" },
+    ping: { name: "Мягкий пинг" }, synthwave: { name: "Синтвейв 🌴" }, organ: { name: "Жуткий орган 🎃" }, ghost: { name: "У-у-у призрака 👻" },
+    coin: { name: "8-бит монетка 🪙" }
+  };
+
+  root.BAND_RESTYLE = { SOUNDS: SOUNDS, THEMES: THEMES, FONTS: FONTS, DISPLAY_FONTS: DISPLAY_FONTS, displayFontFor: displayFontFor, DEFAULTS: DEFAULTS, buildCss: buildCss, themeFor: themeFor, mix: mix, rgba: rgba };
 })(typeof window !== "undefined" ? window : globalThis);

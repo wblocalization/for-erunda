@@ -136,6 +136,20 @@
 
   function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
 
+  // Смайлик приветствия: по времени суток, теме и дню недели; держится до смены времени суток.
+  var EMOJI_TIME = { night: ["🌌", "🌙", "⭐", "😴"], morning: ["☀️", "🌅", "☕", "🥐", "🌤️"], day: ["✨", "🌤️", "🍀", "💫", "🌸"], evening: ["🌙", "🌆", "🍵", "✨", "🌇"] };
+  var EMOJI_THEME = { vice: ["🌴", "😎", "🌅", "🕶️"], halloween: ["🎃", "👻", "🦇", "🕸️"], sage: ["🌿", "🍃"], powder: ["🌷", "🎀"], lavender: ["💜", "🪻"], cloud: ["☁️", "🫧"] };
+  function greetEmoji(theme) {
+    var d = new Date(), h = d.getHours();
+    var period = h < 5 ? "night" : h < 12 ? "morning" : h < 18 ? "day" : "evening";
+    var pool = EMOJI_TIME[period].concat(EMOJI_THEME[theme] || [], EMOJI_THEME[theme] || []);
+    if (d.getDay() === 5) pool = pool.concat(["🎉", "🥳"]);
+    if (d.getDay() === 1 && period === "morning") pool = pool.concat(["💪", "☕"]);
+    var key = d.toDateString() + period, n = 0;
+    for (var i = 0; i < key.length; i++) n = (n * 31 + key.charCodeAt(i)) | 0;
+    return pool[Math.abs(n) % pool.length];
+  }
+
   function decorateHeader() {
     var glass = settings.style === "glass";
     var heroOn = glass && (+settings.heroHeight || 50) > 50;
@@ -149,7 +163,7 @@
     var greet = document.querySelector(".ors-greet");
     if (greetOn && !heroOn && center) {
       if (!greet) { greet = document.createElement("span"); greet.className = "ors-greet"; center.appendChild(greet); }
-      setText(greet, hello + " ✨");
+      setText(greet, hello + " " + greetEmoji(settings.theme));
     } else if (greet) greet.remove();
 
     // Текст шапки: в режиме «баннер + виджет» он живёт в виджете справа, в режиме «широкая» — на баннере.
@@ -170,7 +184,7 @@
         headerView.appendChild(hero);
       }
       var n = inboxUnread();
-      setText(hero.children[0], hello + " ✨");
+      setText(hero.children[0], hello + " " + greetEmoji(settings.theme));
       setText(hero.children[1], DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()] +
         (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + " во входящих" : ""));
     } else if (hero) hero.remove();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Band Restyle",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Новый вид для Band (band.wb.ru): обои, стеклянные панели, темы и шрифты.",
   "permissions": [
     "storage",
@@ -11,6 +11,16 @@
     "https://band.wb.ru/*"
   ],
   "content_scripts": [
+    {
+      "matches": [
+        "https://band.wb.ru/*"
+      ],
+      "js": [
+        "notify-hook.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": [
         "https://band.wb.ru/*"
@@ -28,7 +38,8 @@
       "resources": [
         "fonts/*.woff2",
         "vice-sunset.webp",
-        "halloween.webp"
+        "halloween.webp",
+        "sounds/*.wav"
       ],
       "matches": [
         "https://band.wb.ru/*"

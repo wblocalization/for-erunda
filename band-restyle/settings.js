@@ -87,6 +87,14 @@
     box.appendChild(add);
   }
 
+  function playSound(id) {
+    if (!id || id === "none") return;
+    var c = (local.sounds || []).filter(function (x) { return x.id === id; })[0];
+    var a = new Audio(c ? c.data : "sounds/" + id + ".wav");
+    a.volume = Math.max(0, Math.min(1, (+cur.soundVolume || 70) / 100));
+    a.play().catch(function () {});
+  }
+
   function render() {
     $("glassOnly").hidden = cur.style !== "glass";
     $("openFull").hidden = !popup;
@@ -136,7 +144,29 @@
     if (document.activeElement !== $("customColor")) $("customColor").value = cur.customColor;
     if (document.activeElement !== $("customColor2")) $("customColor2").value = cur.customColor2;
 
-    document.querySelectorAll(".toggles input").forEach(function (cb) { cb.checked = cur[cb.dataset.key] !== false; });
+    ["soundMention", "soundDM", "soundOther"].forEach(function (k) {
+    $(k).onchange = function () { var p = {}; p[k] = this.value; save(p); playSound(this.value); };
+  });
+  document.querySelectorAll("button.play[data-for]").forEach(function (b) {
+    b.onclick = function () { playSound($(b.dataset.for).value); };
+  });
+  $("soundUpload").onclick = function () { $("soundFile").click(); };
+  $("soundFile").onchange = function (e) {
+    var file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 1.5 * 1024 * 1024) { alert("Файл больше 1,5 МБ — выбери покороче."); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var id = "snd" + Date.now();
+      saveLocal({ sounds: (local.sounds || []).concat([{ id: id, name: file.name.replace(/\.[^.]+$/, "").slice(0, 30), data: reader.result }]) }, function () {
+        save({ soundMention: id });
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  document.querySelectorAll(".toggles input").forEach(function (cb) { cb.checked = cur[cb.dataset.key] !== false; });
     $("heroWrap").hidden = cur.hero === false;
     $("statusWrap").hidden = cur.statuses === false;
     $("heroHeight").value = cur.heroHeight;
@@ -181,6 +211,33 @@
     $("accentTextPick").hidden = cur.accentText !== "custom";
     if (document.activeElement !== $("headerTextColor")) $("headerTextColor").value = cur.headerTextColor;
     if (document.activeElement !== $("accentTextColor")) $("accentTextColor").value = cur.accentTextColor;
+
+    // Звуки.
+    $("soundWrap").hidden = cur.soundsOn === false;
+    var opts = Object.keys(R.SOUNDS).map(function (id) { return [id, R.SOUNDS[id].name]; })
+      .concat((local.sounds || []).map(function (x) { return [x.id, "🎵 " + x.name]; }));
+    ["soundMention", "soundDM", "soundOther"].forEach(function (k) {
+      var sel = $(k);
+      if (document.activeElement === sel) return;
+      sel.innerHTML = "";
+      opts.forEach(function (o) { var op = document.createElement("option"); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
+      sel.value = cur[k] || "none";
+    });
+    $("soundVolume").value = cur.soundVolume;
+    var cs = $("customSounds"); cs.innerHTML = "";
+    (local.sounds || []).forEach(function (x) {
+      var row = document.createElement("div");
+      row.innerHTML = "<b></b><span><button class=\"play\" title=\"Прослушать\">▶</button><button class=\"play\" title=\"Удалить\">✕</button></span>";
+      row.querySelector("b").textContent = x.name;
+      var bs = row.querySelectorAll("button");
+      bs[0].onclick = function () { playSound(x.id); };
+      bs[1].onclick = function () {
+        if (!confirm("Удалить звук «" + x.name + "»?")) return;
+        saveLocal({ sounds: local.sounds.filter(function (y) { return y.id !== x.id; }) });
+        ["soundMention", "soundDM", "soundOther"].forEach(function (k) { if (cur[k] === x.id) { var p = {}; p[k] = "none"; save(p); } });
+      };
+      cs.appendChild(row);
+    });
 
     var fonts = $("fonts"); fonts.innerHTML = "";
     Object.keys(R.FONTS).forEach(function (id) {
@@ -229,7 +286,7 @@
   };
   $("openFull").onclick = function () { chrome.runtime.openOptionsPage(); };
 
-  ["heroTextColor", "dim", "blur", "chatOpacity", "radius", "heroHeight", "heroPos", "greetingName", "statusPresets", "customColor", "customColor2", "headerTextColor", "accentTextColor"].forEach(function (k) {
+  ["soundVolume", "heroTextColor", "dim", "blur", "chatOpacity", "radius", "heroHeight", "heroPos", "greetingName", "statusPresets", "customColor", "customColor2", "headerTextColor", "accentTextColor"].forEach(function (k) {
     var timer = null;
     $(k).oninput = function () {
       var v = this.type === "range" ? +this.value : this.value;
@@ -244,9 +301,9 @@
 
   chrome.storage.sync.get(R.DEFAULTS, function (s) {
     cur = s;
-    chrome.storage.local.get({ images: [], bandStatus: null }, function (l) { local = l; render(); });
+    chrome.storage.local.get({ images: [], bandStatus: null, sounds: [] }, function (l) { local = l; render(); });
   });
   chrome.storage.onChanged.addListener(function (ch, area) {
-    if (area === "local") chrome.storage.local.get({ images: [], bandStatus: null }, function (l) { local = l; render(); });
+    if (area === "local") chrome.storage.local.get({ images: [], bandStatus: null, sounds: [] }, function (l) { local = l; render(); });
   });
 })();

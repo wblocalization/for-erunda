@@ -64,3 +64,13 @@ body.full .walls { grid-template-columns: repeat(4, 1fr); }
 .pick input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }
 .field textarea { font: 13px/1.5 Menlo, Consolas, monospace; color: var(--ink); padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; resize: vertical; }
 .field code { font-size: 11px; background: #f1eff6; padding: 1px 5px; border-radius: 5px; }
+.sounds { display: flex; flex-direction: column; gap: 8px; }
+.sounds label { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--ink); }
+.sounds span { display: flex; gap: 6px; }
+.sounds select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; background: #fff; min-width: 190px; }
+button.play { width: 32px; padding: 0; text-align: center; border-radius: 50%; }
+.soundList { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.soundList div { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 9px; }
+.soundList div span { display: flex; gap: 6px; }
+#soundUpload { padding: 6px 12px; }
+#soundWrap .sliders + .sub { margin-top: 12px; }
