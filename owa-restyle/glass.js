@@ -82,6 +82,13 @@
       "._n_q1", "._n_r1", "._fce_a", "._fce_a.ms-bg-color-themeLighterAlt", "._n_e1"
     ].map(function (x) { return "html " + x.replace(/^html /, ""); }).join(",") + "{background:transparent!important;background-image:none!important}");
 
+    // Служебные разделители и рамки OWA между панелями — убираем (перетаскивать границу панелей можно по-прежнему).
+    out.push("html [role=\"main\"] .vResize,html [role=\"main\"] .vResize *,html ._n_e1,html ._n_e1 *{background:transparent!important;border-color:transparent!important;box-shadow:none!important;outline:0!important}");
+    out.push("html [role=\"main\"] .vResize::before,html [role=\"main\"] .vResize::after{display:none!important}");
+    out.push("html [role=\"main\"]._n_X,html [role=\"main\"] ._n_X,html ._n_q1,html ._n_r1,html ._fce_a,html ._n_t1,html ._n_T,html #primaryHeaderView,html #primaryContainer>div" +
+      "{border-color:transparent!important}");
+    out.push("html #primaryHeaderView,html #primaryHeaderView>div,html ._n_c,html ._n_t1{border:0!important;box-shadow:none!important}");
+
     // Шапка прозрачная, поверх обоев.
     out.push("html #O365_NavHeader,html #O365_NavHeader.o365cs-topnavBGImage,html .o365cs-topnavBGColor-2{background:linear-gradient(180deg,rgba(0,0,0,.22),rgba(0,0,0,0))!important}");
     out.push("html #O365_NavHeader .o365cs-nav-brandingText,html .ors-greet{text-shadow:0 1px 8px rgba(0,0,0,.25)}");
