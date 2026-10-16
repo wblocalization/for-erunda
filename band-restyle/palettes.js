@@ -55,7 +55,7 @@
 
   var DEFAULTS = {
     style: "glass", theme: "vice", font: "golos", wallpaper: "theme", dim: 10, blur: 22, customColor: "#E0457B", customColor2: "#7C5BB0",
-    sidebarTone: "dark", chatOpacity: 84, radius: 18, headerText: "white", headerTextColor: "#FFFFFF",
+    sidebarTone: "dark", chatOpacity: 90, radius: 18, headerText: "white", headerTextColor: "#FFFFFF",
     accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto",
     hero: true, heroHeight: 170, heroImage: "theme", heroPos: 40, heroCollapsed: false, greetingName: "",
     digest: true, statuses: true, notes: true,
@@ -123,7 +123,7 @@
       "--mention-bg": t.primary,
       "--mention-color": "#FFFFFF",
       "--center-channel-bg": "#FFFFFF",
-      "--center-channel-color": mix(sb, "#1F1B2E", .55),
+      "--center-channel-color": mix(th.sidebar, "#141020", .75),
       "--new-message-separator": t.primary,
       "--link-color": link,
       "--button-bg": t.primary,
@@ -298,12 +298,29 @@
     ].join("\n");
   }
 
+  // Band рисует текст сообщений и заголовки полупрозрачным цветом — на стекле это бледно-серый. Делаем сплошным.
+  function readableTextCss() {
+    var ink = "var(--center-channel-color)";
+    return [
+      "html .post-message__text,html .post-message__text p,html .post-message__text li,html .post-message__text td,html .post-message__text th," +
+        "html .post-message__text blockquote,html .post-message__text h1,html .post-message__text h2,html .post-message__text h3," +
+        "html .post-message__text h4,html .post-message__text h5,html .post-message__text h6,html .post-message__text .markdown__heading," +
+        "html .post__body,html .post-message,html .post-attachment,html .attachment__body,html .attachment__text,html .attachment__title," +
+        "html .channel-intro,html .channel-intro__text{color:" + ink + "!important;opacity:1!important}",
+      "html .post-message__text h1,html .post-message__text h2,html .post-message__text h3,html .post-message__text .markdown__heading{font-weight:700}",
+      "html .post-message__text blockquote{border-left-color:" + "rgba(var(--button-bg-rgb),.4)!important}",
+      "html .post__time,html .post-edited__indicator,html .post__header .post-pre-header{color:rgba(var(--center-channel-color-rgb),.62)!important;opacity:1!important}",
+      "html .channel-header__description,html .channel-header__description *{color:rgba(var(--center-channel-color-rgb),.7)!important}"
+    ].join("\n");
+  }
+
   function buildCss(s, urlFor, extras) {
     extras = extras || {};
     var th = themeFor(s);
     var css = [];
     if (th && th.t) {
       css.push(varsCss(th, s));
+      css.push(readableTextCss());
       if (s.style === "glass") css.push(glassCss(th, s, extras));
       if (s.sidebarTone === "light") css.push(lightSidebarCss(th));
     }
