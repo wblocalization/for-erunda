@@ -31,7 +31,9 @@
             (local.images || []).filter(function (i) { return i.id === s.heroImage; })[0];
           var reading = s.readingImage && s.readingImage !== "none" &&
             (local.images || []).filter(function (i) { return i.id === s.readingImage; })[0];
-          style.textContent = R.buildCss(s, urlFor, { wallpaper: wall, emptyImage: local.emptyImage,
+          // В календаре OWA вёрстка завязана на ширину Segoe UI — там оставляем родной шрифт.
+          var css = isCalendar() ? Object.assign({}, s, { font: "original" }) : s;
+          style.textContent = R.buildCss(css, urlFor, { wallpaper: wall, emptyImage: local.emptyImage,
             heroImage: hero ? hero.data : null, readingImage: reading ? reading.data : null });
           document.documentElement.classList.toggle("ors-glass", s.style === "glass");
           schedule();
@@ -40,8 +42,14 @@
     });
   }
 
+  function isCalendar() { return /path=\/calendar/i.test(location.hash + location.search) || /\/calendar/i.test(location.pathname); }
+
   load();
   chrome.storage.onChanged.addListener(load);
+  var wasCalendar = isCalendar();
+  window.addEventListener("hashchange", function () {
+    if (isCalendar() !== wasCalendar) { wasCalendar = isCalendar(); load(); }
+  });
 
   // ---- Украшения в стиле «Стекло» ----
 
