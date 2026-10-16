@@ -89,7 +89,7 @@
     sidebarTone: "dark", chatOpacity: 90, radius: 18, headerText: "white", headerTextColor: "#FFFFFF",
     accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto",
     hero: true, heroHeight: 170, heroImage: "theme", heroPos: 40, heroCollapsed: false, greetingName: "",
-    digest: true, statuses: true, notes: true, heroText: "white", heroTextColor: "#FFFFFF", noteStyle: "theme",
+    digest: true, statuses: true, notes: true, readMarks: true, heroText: "white", heroTextColor: "#FFFFFF", noteStyle: "theme",
     statusPresets: "hamburger | Обед | 60\nheadphones | На созвоне | 60\nhouse | Не за компом | 30\ndart | Фокус, пишите позже | 120"
   };
 
@@ -374,6 +374,24 @@
     ].join("\n");
   }
 
+  // Отметки прочтения Band (wb-post-read-status): плашка с подписью. Две активные галочки — прочитано, иначе — доставлено.
+  function readMarksCss() {
+    var READ = ".wb-post-read-status:has(.wb-post-read-status__icon_active+.wb-post-read-status__icon_active)";
+    return [
+      "html .wb-post-read-status{display:inline-flex!important;align-items:center;padding:2px 9px 2px 6px;border-radius:10px;cursor:pointer;" +
+        "font:600 11.5px/1.3 \"Band Restyle UI\",\"Open Sans\",sans-serif;background:rgba(var(--center-channel-color-rgb),.07);" +
+        "color:rgba(var(--center-channel-color-rgb),.6)!important;transition:background-color .15s,box-shadow .15s;white-space:nowrap}",
+      "html .wb-post-read-status__icon{display:inline-flex!important;font-size:15px!important;color:inherit!important;opacity:1!important}",
+      "html .wb-post-read-status__icon svg{width:15px!important;height:15px!important}",
+      "html .wb-post-read-status__icon+.wb-post-read-status__icon{margin-left:-9px}",
+      "html .wb-post-read-status::after{content:\"доставлено\";margin-left:5px}",
+      "html " + READ + "{background:rgba(var(--button-bg-rgb),.13);color:var(--button-bg)!important}",
+      "html " + READ + "::after{content:\"прочитано\"}",
+      "html .wb-post-read-status:hover{background:rgba(var(--button-bg-rgb),.2);box-shadow:0 0 0 2px rgba(var(--button-bg-rgb),.15)}",
+      "html .wb-post-read-status:hover::after{text-decoration:underline;text-underline-offset:2px}"
+    ].join("\n");
+  }
+
   function buildCss(s, urlFor, extras) {
     extras = extras || {};
     var th = themeFor(s);
@@ -384,6 +402,7 @@
       if (s.style === "glass") css.push(glassCss(th, s, extras));
       if (s.sidebarTone === "light") css.push(lightSidebarCss(th));
       css.push(statusIconsCss());
+      if (s.readMarks !== false) css.push(readMarksCss());
     }
     css.push(fontCss(s.font, displayFontFor(s, th), urlFor));
     return css.join("\n");
