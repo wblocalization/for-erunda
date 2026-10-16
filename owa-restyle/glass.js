@@ -227,14 +227,17 @@
     out.push("html #O365_NavHeader #O365_MainLink_NavMenu{background:transparent!important;box-shadow:none}");
     out.push("html #O365_NavHeader #O365_MainLink_NavMenu:hover{background:rgba(255,255,255,.2)!important}");
     out.push("html #O365_NavHeader .o365cs-nav-o365Branding,html #O365_NavHeader .o365cs-nav-appTitle{text-decoration:none!important;border:0!important;box-shadow:none!important;padding-left:6px!important;margin:0!important}");
-    // Аватарка.
-    out.push("html #O365_NavHeader button._ho2_2{border:0!important;background:transparent!important;padding:0!important;margin-left:6px!important;height:auto!important;width:auto!important;box-shadow:none!important}");
-    out.push("html #O365_NavHeader button._ho2_2>div{display:flex!important;align-items:center;width:auto!important;height:auto!important;border:0!important;padding:0!important;margin:0!important}");
-    out.push("html #O365_NavHeader button._ho2_2 ._pe_62{display:none!important}");
-    out.push("html #O365_NavHeader button._ho2_2 ._pe_h,html #O365_NavHeader button._ho2_2 ._pe_h>div{display:block!important;width:40px!important;height:40px!important;border-radius:50%!important;overflow:hidden;border:0!important;padding:0!important;margin:0!important;font-size:0!important;line-height:0!important}");
-    out.push("html #O365_NavHeader button._ho2_2 ._pe_h{box-shadow:0 0 0 2px rgba(255,255,255,.85),0 4px 12px rgba(0,0,0,.2)}");
-    out.push("html #O365_NavHeader button._ho2_2 img{width:40px!important;height:40px!important;top:0!important;object-fit:cover;border-radius:50%}");
-    out.push("html #O365_NavHeader button._ho2_2 ._pe_g{display:none!important}");
+    // Аватарка: сама кнопка — кружок 40×40, фото заполняет его целиком, обводка рисуется внутри (её не обрежут контейнеры OWA).
+    out.push("html #O365_NavHeader button._ho2_2{position:relative!important;flex:none;width:40px!important;height:40px!important;min-width:0!important;padding:0!important;" +
+      "margin:0 2px 0 6px!important;border:0!important;border-radius:50%!important;overflow:hidden!important;background:rgba(255,255,255,.2)!important;box-shadow:none!important;vertical-align:middle}");
+    out.push("html #O365_NavHeader button._ho2_2::after{content:\"\";position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(255,255,255,.9);pointer-events:none}");
+    out.push("html #O365_NavHeader button._ho2_2:hover::after{box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 40px rgba(255,255,255,.12)}");
+    out.push("html #O365_NavHeader button._ho2_2 ._pe_62,html #O365_NavHeader button._ho2_2 ._pe_g{display:none!important}");
+    out.push("html #O365_NavHeader button._ho2_2 ._ho2_5,html #O365_NavHeader button._ho2_2 ._pe_h,html #O365_NavHeader button._ho2_2 ._pe_h>div,html #O365_NavHeader button._ho2_2 ._pe_h>div>div" +
+      "{position:absolute!important;inset:0!important;display:block!important;width:100%!important;height:100%!important;margin:0!important;padding:0!important;border:0!important;" +
+      "border-radius:50%!important;overflow:hidden!important;font-size:0!important;line-height:0!important;background:transparent!important}");
+    out.push("html #O365_NavHeader button._ho2_2 img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover;border-radius:50%;margin:0!important}");
+    out.push("html #O365_NavHeader .o365cs-nav-topItem:has(button._ho2_2){width:auto!important;margin:0!important;padding:0!important;overflow:visible!important}");
 
     // Шрифт для заголовков у тем с «характером».
     if (th.displayFont) {
