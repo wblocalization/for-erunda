@@ -374,21 +374,21 @@
     ].join("\n");
   }
 
-  // Отметки прочтения Band (wb-post-read-status): плашка с подписью. Две активные галочки — прочитано, иначе — доставлено.
+  // Отметки прочтения Band (wb-post-read-status). Размеры и раскладку не трогаем — Band ставит их в узкое место у края
+  // сообщения. Только цвет, увеличение через transform и подсказка при наведении (всплывает слева, поверх).
   function readMarksCss() {
     var READ = ".wb-post-read-status:has(.wb-post-read-status__icon_active+.wb-post-read-status__icon_active)";
     return [
-      "html .wb-post-read-status{display:inline-flex!important;align-items:center;padding:2px 9px 2px 6px;border-radius:10px;cursor:pointer;" +
-        "font:600 11.5px/1.3 \"Band Restyle UI\",\"Open Sans\",sans-serif;background:rgba(var(--center-channel-color-rgb),.07);" +
-        "color:rgba(var(--center-channel-color-rgb),.6)!important;transition:background-color .15s,box-shadow .15s;white-space:nowrap}",
-      "html .wb-post-read-status__icon{display:inline-flex!important;font-size:15px!important;color:inherit!important;opacity:1!important}",
-      "html .wb-post-read-status__icon svg{width:15px!important;height:15px!important}",
-      "html .wb-post-read-status__icon+.wb-post-read-status__icon{margin-left:-9px}",
-      "html .wb-post-read-status::after{content:\"доставлено\";margin-left:5px}",
-      "html " + READ + "{background:rgba(var(--button-bg-rgb),.13);color:var(--button-bg)!important}",
-      "html " + READ + "::after{content:\"прочитано\"}",
-      "html .wb-post-read-status:hover{background:rgba(var(--button-bg-rgb),.2);box-shadow:0 0 0 2px rgba(var(--button-bg-rgb),.15)}",
-      "html .wb-post-read-status:hover::after{text-decoration:underline;text-underline-offset:2px}"
+      "html .wb-post-read-status{position:relative;cursor:pointer;color:rgba(var(--center-channel-color-rgb),.5)!important}",
+      "html .wb-post-read-status__icon{color:inherit!important;opacity:1!important}",
+      "html " + READ + "{color:var(--button-bg)!important}",
+      "html " + READ + " .wb-post-read-status__icon{transform:scale(1.18);filter:drop-shadow(0 0 1px rgba(var(--button-bg-rgb),.35))}",
+      "html .wb-post-read-status::after{content:\"доставлено\";position:absolute;right:calc(100% + 8px);top:50%;transform:translateY(-50%);z-index:50;" +
+        "padding:4px 9px;border-radius:8px;background:var(--center-channel-color);color:var(--center-channel-bg);" +
+        "font:600 11.5px/1.2 \"Band Restyle UI\",\"Open Sans\",sans-serif;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;" +
+        "box-shadow:0 6px 16px rgba(0,0,0,.18)}",
+      "html " + READ + "::after{content:\"прочитано · нажми, чтобы увидеть кто\";background:var(--button-bg);color:var(--button-color)}",
+      "html .wb-post-read-status:hover::after,html .wb-post-read-status:focus-visible::after{opacity:1}"
     ].join("\n");
   }
 
