@@ -314,6 +314,25 @@
     ].join("\n");
   }
 
+  // Значки статуса у людей: свои цвета (онлайн — зелёный и т. д.), даже если иконкам в панели задан другой цвет.
+  function statusIconsCss() {
+    var scope = ["html #SidebarContainer .SidebarLink ", "html #SidebarContainer ", "html "];
+    function rule(cls, color) {
+      return scope.map(function (sc) { return sc + "." + cls + "," + sc + "." + cls + " *"; }).join(",") +
+        "{color:" + color + "!important;fill:" + color + "!important;opacity:1!important}";
+    }
+    return [
+      rule("online--icon", "var(--online-indicator)"),
+      rule("away--icon", "var(--away-indicator)"),
+      rule("dnd--icon", "var(--dnd-indicator)"),
+      rule("offline--icon", "rgba(var(--sidebar-text-rgb),.5)"),
+      // Старый вариант разметки статуса (svg внутри .status).
+      "html #SidebarContainer .status.online svg,html #SidebarContainer .status--online svg{fill:var(--online-indicator)!important}",
+      "html #SidebarContainer .status.away svg,html #SidebarContainer .status--away svg{fill:var(--away-indicator)!important}",
+      "html #SidebarContainer .status.dnd svg,html #SidebarContainer .status--dnd svg{fill:var(--dnd-indicator)!important}"
+    ].join("\n");
+  }
+
   function buildCss(s, urlFor, extras) {
     extras = extras || {};
     var th = themeFor(s);
@@ -323,6 +342,7 @@
       css.push(readableTextCss());
       if (s.style === "glass") css.push(glassCss(th, s, extras));
       if (s.sidebarTone === "light") css.push(lightSidebarCss(th));
+      css.push(statusIconsCss());
     }
     var display = s.displayFont === "on" ? (th && th.displayFont) || true
       : s.displayFont !== "off" && th && th.displayFont && s.style === "glass" ? th.displayFont : false;
