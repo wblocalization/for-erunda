@@ -49,3 +49,5 @@ body.full .walls { grid-template-columns: repeat(4, 1fr); }
 .hint { color: var(--mute); font-size: 11px; margin: 16px 0 0; }
 [hidden] { display: none !important; }
 .sub { color: var(--mute); font-size: 11px; margin: -4px 0 7px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; color: var(--mute); }
+.field input { font: inherit; color: var(--ink); padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; }

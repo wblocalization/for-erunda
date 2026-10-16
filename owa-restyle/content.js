@@ -95,12 +95,18 @@
   var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
   var DAYS = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
 
+  var SURNAME = /(ов|ова|ев|ева|ёв|ёва|ин|ина|ын|ына|ский|ская|цкий|цкая|ко|енко|ук|юк|ич|ян|дзе|швили|ова-|ой)$/i;
+
+  // Имя для приветствия: из настроек, иначе из кнопки профиля OWA («Меню Фамилия Имя Отчество с подменю»).
   function firstName() {
-    var btn = document.querySelector('button[aria-label^="Меню "]');
+    if (settings.greetingName && settings.greetingName.trim()) return settings.greetingName.trim();
+    var btn = document.querySelector('button[aria-label^="Меню "], button[aria-label^="Menu "]');
     if (!btn) return "";
-    // «Меню Фамилия Имя Отчество с подменю» → Имя
-    var parts = btn.getAttribute("aria-label").replace(/^Меню\s+/, "").replace(/\s+с подменю.*$/, "").split(/\s+/);
-    return parts.length >= 2 ? parts[1] : parts[0];
+    var parts = btn.getAttribute("aria-label").replace(/^(Меню|Menu)\s+/, "").replace(/\s+(с подменю|with submenu).*$/i, "")
+      .split(/\s+/).filter(Boolean);
+    if (parts.length >= 3) return parts[1];                          // Фамилия Имя Отчество
+    if (parts.length === 2) return SURNAME.test(parts[0]) ? parts[1] : parts[0]; // Фамилия Имя / Имя Фамилия
+    return parts[0] || "";
   }
 
   function inboxUnread() {
@@ -150,9 +156,62 @@
       var n = inboxUnread();
       var sub = DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()] +
         (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + " во входящих" : "");
-      setText(hero.firstChild, hello + " ✨");
-      setText(hero.lastChild, sub);
+      setText(hero.children[0], hello + " ✨");
+      setText(hero.children[1], sub);
     } else if (hero) hero.remove();
+
+    // Встречи на сегодня — справа на баннере.
+    var meetBox = document.querySelector(".ors-meet");
+    if (heroOn && settings.meetings !== false && headerView && window.OWA_RESTYLE_MEETINGS) {
+      if (!meetBox) {
+        meetBox = document.createElement("div");
+        meetBox.className = "ors-meet";
+        headerView.appendChild(meetBox);
+      }
+      window.OWA_RESTYLE_MEETINGS.load().then(function (items) { renderMeetings(meetBox, items); });
+    } else if (meetBox) meetBox.remove();
+  }
+
+  function hhmm(d) { return d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes(); }
+
+  function inMinutes(ms) {
+    var m = Math.round(ms / 60000);
+    if (m < 60) return "через " + m + " мин";
+    var h = Math.floor(m / 60), r = m % 60;
+    return "через " + h + " ч" + (r ? " " + r + " мин" : "");
+  }
+
+  function renderMeetings(box, items) {
+    if (!items) { if (box.childNodes.length) box.textContent = ""; return; } // не загрузилось — молчим
+    var now = new Date();
+    var big = (+settings.heroHeight || 50) >= 150;
+    var allDay = items.filter(function (m) { return m.allDay; });
+    var left = items.filter(function (m) { return !m.allDay && m.end > now; });
+    var max = big ? 3 : 1;
+    var html = [];
+    function chip(cls, time, subject, tail, title) {
+      return '<a class="ors-chip ' + cls + '" href="/owa/#path=/calendar" title="' + esc(title) + '"><i>' + esc(time) + "</i><b>" +
+        esc(subject) + "</b>" + (tail ? "<em>" + esc(tail) + "</em>" : "") + "</a>";
+    }
+    var show = max === 1 ? 1 : (left.length > max ? max - 1 : max);
+    left.slice(0, show).forEach(function (m, i) {
+      var nowOn = m.start <= now;
+      var tail = nowOn ? "сейчас" : (i === 0 || (left[0].start <= now && i === 1)) ? inMinutes(m.start - now) : "";
+      html.push(chip(nowOn ? "now" : (tail ? "next" : ""), hhmm(m.start) + "–" + hhmm(m.end), m.subject, tail,
+        m.subject + (m.location ? " · " + m.location : "")));
+    });
+    if (left.length > show && max > 1) html.push('<a class="ors-chip more" href="/owa/#path=/calendar"><b>ещё ' + (left.length - show) + "</b></a>");
+    if (!left.length) {
+      html.push('<a class="ors-chip done" href="/owa/#path=/calendar"><b>' +
+        (items.length - allDay.length ? "На сегодня встречи закончились 🎉" : "Сегодня без встреч 🎉") + "</b></a>");
+    }
+    if (big && allDay.length && html.length < 4) html.unshift(chip("allday", "весь день", allDay[0].subject, "", allDay[0].subject));
+    var out = html.join("");
+    if (box.getAttribute("data-html") !== out) { box.setAttribute("data-html", out); box.innerHTML = out; }
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; });
   }
 
   // Длинные названия папок обрезаем многоточием, чтобы не наезжали на счётчики.
@@ -220,7 +279,7 @@
     new MutationObserver(function (muts) {
       for (var i = 0; i < muts.length; i++) {
         var n = muts[i].target;
-        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet") || n.classList.contains("ors-hero") || (n.parentElement && n.parentElement.classList && n.parentElement.classList.contains("ors-hero")))) continue;
+        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet") || n.classList.contains("ors-hero") || n.classList.contains("ors-meet") || (n.closest && n.closest(".ors-meet")) || (n.parentElement && n.parentElement.classList && n.parentElement.classList.contains("ors-hero")))) continue;
         schedule();
         return;
       }

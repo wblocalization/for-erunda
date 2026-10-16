@@ -132,6 +132,7 @@
     $("readingPosWrap").hidden = !cur.readingImage || cur.readingImage === "none";
     $("readingPos").value = cur.readingPos;
 
+    if (document.activeElement !== $("greetingName")) $("greetingName").value = cur.greetingName || "";
     $("heroHeight").value = cur.heroHeight;
     $("heroPos").value = cur.heroPos;
 
@@ -173,6 +174,11 @@
       $("emptyPreview").textContent = "Стандартная";
     }
     $("emptyReset").hidden = !local.emptyImage;
+
+    var cs = local.calendarStatus;
+    $("calStatus").textContent = !cs ? "Встречи загрузятся, когда откроешь почту." :
+      cs.ok ? "Календарь подключён: встреч сегодня — " + cs.count + "." :
+      "Не получилось загрузить встречи: " + cs.error + ". Пришли эту строчку — поправлю.";
   }
 
   // Уменьшаем картинку, чтобы не раздувать хранилище: фон до 2560px (JPEG), «пустые места» до 600px (PNG).
@@ -236,11 +242,18 @@
     cb.onchange = function () { var p = {}; p[cb.dataset.key] = cb.checked; save(p); };
   });
 
+  var nameTimer = null;
+  $("greetingName").oninput = function () {
+    var v = this.value;
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(function () { save({ greetingName: v }); }, 400);
+  };
+
   chrome.storage.sync.get(R.DEFAULTS, function (s) {
     cur = s;
-    chrome.storage.local.get({ images: [], emptyImage: null }, function (l) { local = l; render(); });
+    chrome.storage.local.get({ images: [], emptyImage: null, calendarStatus: null }, function (l) { local = l; render(); });
   });
   chrome.storage.onChanged.addListener(function (ch, area) {
-    if (area === "local") chrome.storage.local.get({ images: [], emptyImage: null }, function (l) { local = l; render(); });
+    if (area === "local") chrome.storage.local.get({ images: [], emptyImage: null, calendarStatus: null }, function (l) { local = l; render(); });
   });
 })();

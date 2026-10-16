@@ -273,7 +273,7 @@
   root.OWA_RESTYLE = {
     THEMES: THEMES,
     FONTS: FONTS,
-    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 170, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50 },
+    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 170, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50, greetingName: "", meetings: true },
     buildCss: buildCss
   };
 })(typeof window !== "undefined" ? window : globalThis);

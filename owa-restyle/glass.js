@@ -52,6 +52,11 @@
       "</svg>");
   }
 
+  function rgba(hex, a) {
+    var n = parseInt(hex.replace("#", ""), 16);
+    return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")";
+  }
+
   function css(th, s, extras, urlFor) {
     var t = th.t;
     var dim = Math.max(0, Math.min(70, +s.dim || 0)) / 100;
@@ -157,7 +162,12 @@
     out.push("html [role=\"main\"]._n_X>.vResize[style*=\"256px\"],html [role=\"main\"]._n_X>._n_X[style*=\"256px\"]{left:" + FW + "px!important}");
     // Длинные названия папок — с многоточием (max-width выставляет content.js).
     out.push("html div[autoid=\"_n_a\"] ._n_C4.ors-fit{display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}");
-    out.push("html .o365cs-base.o365cst .o365cs-appLauncherBackground,html #O365_NavHeader .o365cs-nav-button{background-color:transparent!important}");
+    out.push("html #O365_NavHeader .o365cs-nav-button{background-color:transparent!important}");
+    // Меню приложений (плитка ▦): плотный фон цвета темы поверх всего.
+    out.push("html #O365_NavHeader{position:relative;z-index:5}");
+    out.push("html .ors-hero{z-index:1}");
+    out.push("html .o365cs-nav-navMenu,html .o365cs-nav-navMenu .o365cs-appLauncherBackground{background-color:" + rgba(t.darker, .94) + "!important;" + bf + "}");
+    out.push("html .o365cs-nav-navMenu{z-index:1000!important;border-radius:16px!important;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,.28)!important}");
 
     // Шапка-баннер.
     var H = Math.max(50, Math.min(320, +s.heroHeight || 50));
@@ -175,6 +185,20 @@
       out.push("html .ors-hero b{display:block;font:700 " + (H >= 150 ? 34 : 24) + "px/1.15 var(--ors-display, var(--ors-font, \"Segoe UI\", sans-serif));letter-spacing:-.01em}");
       out.push("html .ors-hero span{display:block;margin-top:6px;font:500 15px/1.3 var(--ors-font, \"Segoe UI\", sans-serif);opacity:.92}");
       if (H < 110) out.push("html .ors-hero span{display:none}");
+      out.push("html .ors-hero{right:330px}");
+      out.push("html .ors-meet{position:absolute;right:28px;bottom:18px;z-index:1;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:300px}");
+      out.push("html .ors-chip{display:flex;align-items:center;gap:8px;max-width:300px;padding:6px 12px;border-radius:12px;text-decoration:none!important;color:#fff!important;" +
+        "background:rgba(255,255,255,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28);" + bf + ";font:500 13px/1.25 var(--ors-font, \"Segoe UI\", sans-serif);" +
+        "text-shadow:0 1px 4px rgba(0,0,0,.25);transition:background-color .15s}");
+      out.push("html .ors-chip:hover{background:rgba(255,255,255,.3)}");
+      out.push("html .ors-chip i{font-style:normal;font-weight:600;opacity:.85;white-space:nowrap}");
+      out.push("html .ors-chip b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}");
+      out.push("html .ors-chip em{font-style:normal;white-space:nowrap;padding:2px 8px;border-radius:8px;background:rgba(255,255,255,.22);font-size:12px}");
+      out.push("html .ors-chip.now{background:" + rgba(t.primary, .82) + ";box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),0 0 0 3px " + rgba(t.primary, .25) + "}");
+      out.push("html .ors-chip.now em{background:#fff;color:" + t.dark + ";text-shadow:none;animation:orsPulse 2s ease-in-out infinite}");
+      out.push("@keyframes orsPulse{50%{opacity:.6}}");
+      out.push("html .ors-chip.allday i,html .ors-chip.more b,html .ors-chip.done b{opacity:.9}");
+      if (H < 150) out.push("html .ors-meet{bottom:auto;top:50%;transform:translateY(-10%)}");
     }
 
     // Своя картинка в пустой области чтения (пока письмо не открыто).
@@ -187,7 +211,30 @@
 
     // Приветствие в шапке.
     out.push("html .ors-greet{color:#fff;font:600 16px/50px var(--ors-display, var(--ors-font, \"Segoe UI\", sans-serif));letter-spacing:.01em;white-space:nowrap}");
-    out.push("html .o365cs-nav-centerAlign{display:flex!important;justify-content:center;align-items:center}");
+    // Верхняя панель: своя гибкая раскладка, круглые «стеклянные» кнопки, аватарка кружком.
+    // display у кнопок не трогаем — OWA прячет часть из них через inline display:none.
+    out.push("html #O365_NavHeader{display:flex!important;align-items:center;height:50px!important;padding:0 12px 0 8px!important;box-sizing:border-box}");
+    out.push("html #O365_NavHeader>.o365cs-nav-leftAlign{display:flex!important;align-items:center;position:static!important;float:none!important;flex:none}");
+    out.push("html #O365_NavHeader>.o365cs-nav-centerAlign{display:flex!important;justify-content:center;align-items:center;flex:1 1 auto;min-width:0;position:static!important;float:none!important;width:auto!important}");
+    out.push("html #O365_NavHeader>.o365cs-nav-rightAlign,html #O365_NavHeader>.o365cs-nav-rightAlign>div,html #O365_NavHeader .o365cs-nav-rightMenus,html #O365_NavHeader .o365cs-nav-rightMenus>div" +
+      "{display:flex!important;align-items:center;gap:6px;position:static!important;float:none!important;width:auto!important;margin-left:auto}");
+    out.push("html #O365_NavHeader .o365cs-nav-topItem{border:0!important;box-shadow:none!important;background:none!important;float:none!important;position:relative;height:auto!important}");
+    out.push("html #O365_NavHeader .o365cs-nav-topItem>div{display:flex;align-items:center}");
+    out.push("html #O365_NavHeader button.o365cs-nav-button{width:38px!important;height:38px!important;min-width:0!important;padding:0!important;margin:0!important;line-height:38px!important;text-align:center;" +
+      "border:0!important;border-radius:50%!important;background:rgba(255,255,255,.16)!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);transition:background-color .15s}");
+    out.push("html #O365_NavHeader button.o365cs-nav-button:hover{background:rgba(255,255,255,.3)!important}");
+    out.push("html #O365_NavHeader button.o365cs-nav-button .owaimg{line-height:38px!important;font-size:17px!important;color:#fff!important}");
+    out.push("html #O365_NavHeader #O365_MainLink_NavMenu{background:transparent!important;box-shadow:none}");
+    out.push("html #O365_NavHeader #O365_MainLink_NavMenu:hover{background:rgba(255,255,255,.2)!important}");
+    out.push("html #O365_NavHeader .o365cs-nav-o365Branding,html #O365_NavHeader .o365cs-nav-appTitle{text-decoration:none!important;border:0!important;box-shadow:none!important;padding-left:6px!important;margin:0!important}");
+    // Аватарка.
+    out.push("html #O365_NavHeader button._ho2_2{border:0!important;background:transparent!important;padding:0!important;margin-left:6px!important;height:auto!important;width:auto!important;box-shadow:none!important}");
+    out.push("html #O365_NavHeader button._ho2_2>div{display:flex!important;align-items:center;width:auto!important;height:auto!important;border:0!important;padding:0!important;margin:0!important}");
+    out.push("html #O365_NavHeader button._ho2_2 ._pe_62{display:none!important}");
+    out.push("html #O365_NavHeader button._ho2_2 ._pe_h,html #O365_NavHeader button._ho2_2 ._pe_h>div{display:block!important;width:40px!important;height:40px!important;border-radius:50%!important;overflow:hidden;border:0!important;padding:0!important;margin:0!important;font-size:0!important;line-height:0!important}");
+    out.push("html #O365_NavHeader button._ho2_2 ._pe_h{box-shadow:0 0 0 2px rgba(255,255,255,.85),0 4px 12px rgba(0,0,0,.2)}");
+    out.push("html #O365_NavHeader button._ho2_2 img{width:40px!important;height:40px!important;top:0!important;object-fit:cover;border-radius:50%}");
+    out.push("html #O365_NavHeader button._ho2_2 ._pe_g{display:none!important}");
 
     // Шрифт для заголовков у тем с «характером».
     if (th.displayFont) {
