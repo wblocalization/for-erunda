@@ -68,6 +68,9 @@
     // Цвет текста в шапке: белый (по умолчанию), тёмный или свой. От его яркости зависят подложки под текстом.
     var ht = s.heroText === "dark" ? "#1F2328" : s.heroText === "custom" ? (s.heroTextColor || "#FFFFFF") : "#FFFFFF";
     var lightText = lum(ht) > .4;
+    // Масштаб декоративного шрифта (у узких и пиксельных шрифтов другой «размер на глаз»).
+    var R0 = root.OWA_RESTYLE, dfId0 = R0 && R0.displayFontFor ? R0.displayFontFor(s, th) : null;
+    var dfK = dfId0 && R0.DISPLAY_FONTS[dfId0] && R0.DISPLAY_FONTS[dfId0].size || 1;
     var dim = Math.max(0, Math.min(70, +s.dim || 0)) / 100;
     var blur = Math.max(0, Math.min(40, +s.blur || 0));
     var wall = extras.wallpaper
@@ -256,7 +259,7 @@
         out.push("html #primaryHeaderView::after{content:\"\";position:absolute;top:8px;right:8px;bottom:0;width:var(--ors-w);" + card + ";background:" + widgetBg + ";" + bf + "}");
         // Приветствие — на баннере под «Почта».
         out.push("html .ors-hero{left:36px;right:calc(var(--ors-w) + 44px);bottom:22px}");
-        out.push("html .ors-hero>b{font-size:" + (H >= 200 ? 34 : 28) + "px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}");
+        out.push("html .ors-hero>b{font-size:" + Math.round((H >= 200 ? 34 : 28) * dfK) + "px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}");
         out.push("html .ors-hero>.ors-date{margin-top:6px;font-size:15px;line-height:1.3}");
         // Созвоны — в виджете.
         out.push("html .ors-widget{right:28px;width:calc(var(--ors-w) - 40px);top:62px;bottom:14px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}");
@@ -265,7 +268,7 @@
         out.push("html .ors-chip{padding:5px 10px;font-size:12.5px}");
       } else {
         out.push("html .ors-hero{left:36px;right:330px;bottom:20px}");
-        out.push("html .ors-hero>b{font-size:" + (H >= 150 ? 34 : 24) + "px;line-height:1.15}");
+        out.push("html .ors-hero>b{font-size:" + Math.round((H >= 150 ? 34 : 24) * dfK) + "px;line-height:1.15}");
         out.push("html .ors-hero>.ors-date{margin-top:6px;font-size:15px;line-height:1.3}");
         if (H < 110) out.push("html .ors-hero>.ors-date{display:none}");
         out.push("html .ors-widget{right:28px;bottom:18px;width:300px;display:flex;flex-direction:column;align-items:flex-end;text-align:right}");
@@ -316,20 +319,21 @@
     out.push("html #O365_NavHeader button._ho2_2 img{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover;border-radius:50%;margin:0!important}");
     out.push("html #O365_NavHeader .o365cs-nav-topItem:has(button._ho2_2){width:auto!important;margin:0!important;padding:0!important;overflow:visible!important}");
 
-    // Шрифт для заголовков у тем с «характером».
-    if (th.displayFont) {
+    // Декоративный шрифт заголовков: выбранный в настройках или шрифт темы.
+    var R = root.OWA_RESTYLE, dfId = R && R.displayFontFor ? R.displayFontFor(s, th) : null;
+    var df = dfId && R.DISPLAY_FONTS[dfId];
+    if (df) {
       var fam = "OWA Restyle Display";
-      // true — Unbounded (переменный вес), строка — статичный шрифт из fonts/ (например, «rubik-wet-paint» у Хэллоуина).
-      var df = th.displayFont === true ? { file: "unbounded", suffix: "wght-normal", weight: "200 900", use: 600 }
-        : { file: th.displayFont, suffix: "400-normal", weight: "400", use: 400 };
       ["cyrillic", "latin"].forEach(function (sub) {
-        out.push("@font-face{font-family:\"" + fam + "\";src:url(\"" + urlFor("fonts/" + df.file + "-" + sub + "-" + df.suffix + ".woff2") +
-          "\") format(\"woff2\");font-weight:" + df.weight + ";font-display:swap;unicode-range:" + (sub === "cyrillic" ? "U+0400-045F,U+0490-0491,U+2116" : "U+0000-00FF,U+2000-206F") + "}");
+        out.push("@font-face{font-family:\"" + fam + "\";src:url(\"" + urlFor("fonts/" + df.file + "-" + sub + "-" + (df.v ? "wght" : df.w) + "-normal.woff2") +
+          "\") format(\"woff2\");font-weight:" + (df.v ? "200 900" : df.w) + ";font-display:swap;unicode-range:" + (sub === "cyrillic" ? "U+0400-045F,U+0490-0491,U+2116" : "U+0000-00FF,U+2000-206F") + "}");
       });
+      var use = df.v ? 650 : df.w, k = df.size || 1;
       out.push(":root{--ors-display:\"" + fam + "\", sans-serif}");
-      out.push("html .folderHeaderLabel.folderHeaderLabel,html #O365_NavHeader .o365cs-nav-brandingText{font-family:var(--ors-display)!important;font-weight:" + df.use + "!important;letter-spacing:0}");
-      if (df.use === 400) out.push("html .ors-hero>b{font-weight:400!important;letter-spacing:.01em}");
-      out.push("html .folderHeaderLabel.folderHeaderLabel{background:var(--ors-gradient);-webkit-background-clip:text;background-clip:text;color:transparent!important}");
+      out.push("html .folderHeaderLabel.folderHeaderLabel,html #O365_NavHeader .o365cs-nav-brandingText{font-family:var(--ors-display)!important;font-weight:" + use + "!important;letter-spacing:0}");
+      out.push("html .ors-hero>b{font-weight:" + use + "!important}");
+      if (k !== 1) out.push("html .folderHeaderLabel.folderHeaderLabel{font-size:" + Math.round(21 * k) + "px!important}");
+      if (th.displayFont) out.push("html .folderHeaderLabel.folderHeaderLabel{background:var(--ors-gradient);-webkit-background-clip:text;background-clip:text;color:transparent!important}");
     }
 
     var hshadow = lightText ? "0 2px 12px rgba(0,0,0,.35)" : "0 1px 10px rgba(255,255,255,.6)";

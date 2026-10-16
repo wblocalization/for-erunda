@@ -19,6 +19,14 @@
     });
   });
 
+  Object.keys(R.DISPLAY_FONTS).forEach(function (id) {
+    var f = R.DISPLAY_FONTS[id];
+    ["cyrillic", "latin"].forEach(function (sub) {
+      new FontFace("brs-d-" + id, "url(fonts/" + f.file + "-" + sub + "-" + (f.v ? "wght" : f.w) + "-normal.woff2)", { weight: f.v ? "100 900" : String(f.w) })
+        .load().then(function (ff) { document.fonts.add(ff); }, function () {});
+    });
+  });
+
   var cur = R.DEFAULTS, local = { images: [] };
 
   function save(patch) { cur = Object.assign({}, cur, patch); chrome.storage.sync.set(cur, render); }
@@ -146,7 +154,28 @@
     seg("sidebarTones", "sidebarTone", [["dark", "Тёмная", th.sidebar || "#2E2566"], ["light", "Светлая", th.t ? th.t.lighter : "#F4F4F6"]]);
     seg("headerTexts", "headerText", [["white", "Белый", "#FFFFFF"], ["dark", "Тёмный", "#1F2328"], ["custom", "Свой", cur.headerTextColor]]);
     seg("accentTexts", "accentText", [["theme", "По теме", accentDefault], ["custom", "Свой", cur.accentTextColor]]);
-    seg("displayFonts", "displayFont", [["auto", "По теме"], ["on", "Декоративный"], ["off", "Обычный"]]);
+    var dfs = $("displayFonts"); dfs.innerHTML = "";
+    var themeDf = R.displayFontFor({ displayFont: "auto", style: "glass" }, th);
+    [["auto", "По теме" + (themeDf ? " (" + R.DISPLAY_FONTS[themeDf].name + ")" : " (обычный)"), null], ["off", "Обычный — как интерфейс", null]]
+      .concat(Object.keys(R.DISPLAY_FONTS).map(function (id) { return [id, R.DISPLAY_FONTS[id].name, R.DISPLAY_FONTS[id]]; }))
+      .forEach(function (o) {
+        var b = btn("font" + ((cur.displayFont || "auto") === o[0] ? " on" : ""), "<span></span><small></small>");
+        var name = b.querySelector("span");
+        name.textContent = o[2] ? o[1] + " — Добрый день ✨" : o[1];
+        if (o[2]) {
+          name.style.fontFamily = "brs-d-" + o[0] + ", sans-serif";
+          name.style.fontWeight = o[2].v ? 650 : o[2].w;
+          name.style.fontSize = Math.round(15 * (o[2].size || 1)) + "px";
+        }
+        b.querySelector("small").textContent = o[2] && o[2].note || "";
+        b.onclick = function () { save({ displayFont: o[0] }); };
+        dfs.appendChild(b);
+      });
+    seg("heroTexts", "heroText", [["white", "Белый", "#FFFFFF"], ["dark", "Тёмный", "#1F2328"], ["custom", "Свой", cur.heroTextColor]]);
+    $("heroTextPick").hidden = cur.heroText !== "custom";
+    if (document.activeElement !== $("heroTextColor")) $("heroTextColor").value = cur.heroTextColor || "#FFFFFF";
+    seg("noteStyles", "noteStyle", [["theme", "По теме", th.t ? th.t.lighter : "#F5D2E5"], ["sticky", "Жёлтый стикер", "#FFF2A8"]]);
+    $("noteWrap").hidden = cur.notes === false;
     $("headerTextRow").hidden = cur.style !== "glass";
     $("headerTextPick").hidden = cur.headerText !== "custom";
     $("accentTextPick").hidden = cur.accentText !== "custom";
@@ -200,7 +229,7 @@
   };
   $("openFull").onclick = function () { chrome.runtime.openOptionsPage(); };
 
-  ["dim", "blur", "chatOpacity", "radius", "heroHeight", "heroPos", "greetingName", "statusPresets", "customColor", "customColor2", "headerTextColor", "accentTextColor"].forEach(function (k) {
+  ["heroTextColor", "dim", "blur", "chatOpacity", "radius", "heroHeight", "heroPos", "greetingName", "statusPresets", "customColor", "customColor2", "headerTextColor", "accentTextColor"].forEach(function (k) {
     var timer = null;
     $(k).oninput = function () {
       var v = this.type === "range" ? +this.value : this.value;

@@ -26,7 +26,8 @@
 какая будет фоном, какая — в шапке, а какая — в области чтения. Есть и своя картинка для пустых папок. Картинки хранятся только в этом браузере.
 Яркость и размытие стекла настраиваются ползунками.
 
-**Шрифт интерфейса:** Golos Text, Inter, Manrope, Onest, Segoe UI Variable (есть в Windows 11) или исходный Segoe UI.
+**Шрифты:** 13 шрифтов интерфейса (Golos Text, Inter, Manrope, Onest, Montserrat, Nunito, Rubik, Roboto, Jost, Raleway, Exo 2, Comfortaa и исходный)
+  и 9 декоративных для заголовков и приветствия (Unbounded, Rubik Wet Paint, Lobster, Caveat, Pacifico, Russo One, Rubik Bubbles, Amatic SC, Press Start 2P).
 Письма и окно написания письма остаются в шрифтах Outlook.
 
 | Облако | Лаванда | Классика + Вайс-Сити |

@@ -20,6 +20,15 @@
     });
   });
 
+  // Декоративные шрифты — тоже для превью.
+  Object.keys(R.DISPLAY_FONTS).forEach(function (id) {
+    var f = R.DISPLAY_FONTS[id];
+    ["cyrillic", "latin"].forEach(function (sub) {
+      new FontFace("ors-d-" + id, "url(fonts/" + f.file + "-" + sub + "-" + (f.v ? "wght" : f.w) + "-normal.woff2)", { weight: f.v ? "100 900" : String(f.w) })
+        .load().then(function (ff) { document.fonts.add(ff); }, function () {});
+    });
+  });
+
   var cur = R.DEFAULTS, local = { images: [], emptyImage: null };
 
   function save(patch) {
@@ -182,6 +191,24 @@
     $("accentTextPick").hidden = cur.accentText !== "custom";
     if (document.activeElement !== $("heroTextColor")) $("heroTextColor").value = cur.heroTextColor || "#FFFFFF";
     if (document.activeElement !== $("accentTextColor")) $("accentTextColor").value = cur.accentTextColor || accentDefault;
+
+    var dfs = $("displayFonts"); dfs.innerHTML = "";
+    var themeDf = R.displayFontFor({ displayFont: "auto" }, R.themeFor(cur) || {});
+    [["auto", "По теме" + (themeDf ? " (" + R.DISPLAY_FONTS[themeDf].name + ")" : " (обычный)"), null], ["off", "Обычный — как интерфейс", null]]
+      .concat(Object.keys(R.DISPLAY_FONTS).map(function (id) { return [id, R.DISPLAY_FONTS[id].name, R.DISPLAY_FONTS[id]]; }))
+      .forEach(function (o) {
+        var b = btn("font" + ((cur.displayFont || "auto") === o[0] ? " on" : ""), "<span></span><small></small>");
+        var name = b.querySelector("span");
+        name.textContent = o[2] ? o[1] + " — Добрый день ✨" : o[1];
+        if (o[2]) {
+          name.style.fontFamily = "ors-d-" + o[0] + ", sans-serif";
+          name.style.fontWeight = o[2].v ? 650 : o[2].w;
+          name.style.fontSize = Math.round(15 * (o[2].size || 1)) + "px";
+        }
+        b.querySelector("small").textContent = o[2] && o[2].note || "";
+        b.onclick = function () { save({ displayFont: o[0] }); };
+        dfs.appendChild(b);
+      });
 
     var fonts = $("fonts"); fonts.innerHTML = "";
     Object.keys(R.FONTS).forEach(function (id) {

@@ -110,8 +110,38 @@
     inter: { name: "Inter", file: "inter" },
     manrope: { name: "Manrope", file: "manrope" },
     golos: { name: "Golos Text", file: "golos-text" },
-    onest: { name: "Onest", file: "onest" }
+    onest: { name: "Onest", file: "onest" },
+    montserrat: { name: "Montserrat", file: "montserrat" },
+    nunito: { name: "Nunito", note: "мягкий", file: "nunito" },
+    rubik: { name: "Rubik", file: "rubik" },
+    roboto: { name: "Roboto", file: "roboto" },
+    jost: { name: "Jost", file: "jost" },
+    raleway: { name: "Raleway", file: "raleway" },
+    exo2: { name: "Exo 2", note: "техно", file: "exo-2" },
+    comfortaa: { name: "Comfortaa", note: "круглый", file: "comfortaa" }
   };
+
+  // Декоративные шрифты для заголовков и приветствия. var — переменный вес, иначе статичный файл нужного веса.
+  var DISPLAY_FONTS = {
+    unbounded: { name: "Unbounded", file: "unbounded", v: true },
+    "rubik-wet-paint": { name: "Rubik Wet Paint", note: "стекающий", file: "rubik-wet-paint", w: 400 },
+    lobster: { name: "Lobster", note: "ретро", file: "lobster", w: 400 },
+    caveat: { name: "Caveat", note: "от руки", file: "caveat", v: true, size: 1.25 },
+    pacifico: { name: "Pacifico", note: "курсив", file: "pacifico", w: 400 },
+    "russo-one": { name: "Russo One", file: "russo-one", w: 400 },
+    "rubik-bubbles": { name: "Rubik Bubbles", note: "пузыри", file: "rubik-bubbles", w: 400 },
+    "amatic-sc": { name: "Amatic SC", note: "узкий", file: "amatic-sc", w: 700, size: 1.3 },
+    "press-start-2p": { name: "Press Start 2P", note: "пиксельный", file: "press-start-2p", w: 400, size: .62 }
+  };
+
+  // Какой декоративный шрифт использовать: выбор в настройках или шрифт темы.
+  function displayFontFor(s, th) {
+    var pick = s && s.displayFont;
+    if (pick === "off") return null;
+    if (pick && pick !== "auto" && DISPLAY_FONTS[pick]) return pick;
+    var td = th && th.displayFont;
+    return td === true ? "unbounded" : td || null;
+  }
 
   var FAMILY = "OWA Restyle UI";
 
@@ -347,7 +377,9 @@
   root.OWA_RESTYLE = {
     THEMES: THEMES,
     FONTS: FONTS,
-    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 220, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50, greetingName: "", meetings: true, heroLayout: "split", widgetImage: "none", widgetPos: 50, customColor: "#E0457B", customColor2: "#7C5BB0", heroText: "white", heroTextColor: "#FFFFFF", accentText: "theme", accentTextColor: "#C23F8C" },
+    DISPLAY_FONTS: DISPLAY_FONTS,
+    displayFontFor: displayFontFor,
+    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 220, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50, greetingName: "", meetings: true, heroLayout: "split", widgetImage: "none", widgetPos: 50, customColor: "#E0457B", customColor2: "#7C5BB0", heroText: "white", heroTextColor: "#FFFFFF", accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto" },
     buildCss: buildCss,
     themeFor: themeFor
   };

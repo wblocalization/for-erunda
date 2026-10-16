@@ -44,9 +44,16 @@
       <div class="sliders" id="heroPosWrap">
         <label>Сдвиг картинки ↕ <input id="heroPos" type="range" min="0" max="100" step="1"></label>
       </div>
+      <p class="sub">Текст на баннере</p>
+      <div id="heroTexts" class="seg3"></div>
+      <label class="pick" id="heroTextPick"><input id="heroTextColor" type="color"> свой цвет</label>
       <label class="field">Как обращаться в приветствии
         <input id="greetingName" type="text" placeholder="Пусто — имя из профиля Band" maxlength="40">
       </label>
+    </div>
+    <div id="noteWrap">
+      <p class="sub">Вид заметки</p>
+      <div id="noteStyles" class="seg3"></div>
     </div>
     <div id="statusWrap">
       <label class="field">Кнопки статусов — по одной в строке: <code>эмодзи | текст | минуты</code>
@@ -82,7 +89,7 @@
     <h2>Шрифт</h2>
     <div id="fonts" class="list"></div>
     <p class="sub" style="margin-top:12px">Заголовки (название канала и команды)</p>
-    <div id="displayFonts" class="seg3"></div>
+    <div id="displayFonts" class="list"></div>
 
     <p class="hint">Код в сообщениях остаётся моноширинным. Свои картинки хранятся только в этом браузере.</p>
   </main>

@@ -50,15 +50,46 @@
     golos: { name: "Golos Text", file: "golos-text" },
     inter: { name: "Inter", file: "inter" },
     manrope: { name: "Manrope", file: "manrope" },
-    onest: { name: "Onest", file: "onest" }
+    onest: { name: "Onest", file: "onest" },
+    montserrat: { name: "Montserrat", file: "montserrat" },
+    nunito: { name: "Nunito", note: "мягкий", file: "nunito" },
+    rubik: { name: "Rubik", file: "rubik" },
+    roboto: { name: "Roboto", file: "roboto" },
+    jost: { name: "Jost", file: "jost" },
+    raleway: { name: "Raleway", file: "raleway" },
+    exo2: { name: "Exo 2", note: "техно", file: "exo-2" },
+    comfortaa: { name: "Comfortaa", note: "круглый", file: "comfortaa" }
   };
+
+  // Декоративные шрифты для заголовков и приветствия. v — переменный вес, иначе статичный файл веса w.
+  var DISPLAY_FONTS = {
+    unbounded: { name: "Unbounded", file: "unbounded", v: true },
+    "rubik-wet-paint": { name: "Rubik Wet Paint", note: "стекающий", file: "rubik-wet-paint", w: 400 },
+    lobster: { name: "Lobster", note: "ретро", file: "lobster", w: 400 },
+    caveat: { name: "Caveat", note: "от руки", file: "caveat", v: true, size: 1.25 },
+    pacifico: { name: "Pacifico", note: "курсив", file: "pacifico", w: 400 },
+    "russo-one": { name: "Russo One", file: "russo-one", w: 400 },
+    "rubik-bubbles": { name: "Rubik Bubbles", note: "пузыри", file: "rubik-bubbles", w: 400 },
+    "amatic-sc": { name: "Amatic SC", note: "узкий", file: "amatic-sc", w: 700, size: 1.3 },
+    "press-start-2p": { name: "Press Start 2P", note: "пиксельный", file: "press-start-2p", w: 400, size: .62 }
+  };
+
+  function displayFontFor(s, th) {
+    var pick = s && s.displayFont;
+    if (pick === "off") return null;
+    if (pick && pick !== "auto" && pick !== "on" && DISPLAY_FONTS[pick]) return pick;
+    var td = th && th.displayFont;
+    if (pick === "on") return td === true || !td ? "unbounded" : td;
+    if (s && s.style !== "glass") return null;
+    return td === true ? "unbounded" : td || null;
+  }
 
   var DEFAULTS = {
     style: "glass", theme: "vice", font: "golos", wallpaper: "theme", dim: 10, blur: 22, customColor: "#E0457B", customColor2: "#7C5BB0",
     sidebarTone: "dark", chatOpacity: 90, radius: 18, headerText: "white", headerTextColor: "#FFFFFF",
     accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto",
     hero: true, heroHeight: 170, heroImage: "theme", heroPos: 40, heroCollapsed: false, greetingName: "",
-    digest: true, statuses: true, notes: true,
+    digest: true, statuses: true, notes: true, heroText: "white", heroTextColor: "#FFFFFF", noteStyle: "theme",
     statusPresets: "hamburger | Обед | 60\nheadphones | На созвоне | 60\nhouse | Не за компом | 30\ndart | Фокус, пишите позже | 120"
   };
 
@@ -185,18 +216,20 @@
       faces("Band Restyle UI", f.file, ["100 900"]);
       out.push("html body,html input,html textarea,html button{font-family:\"Band Restyle UI\",\"Open Sans\",sans-serif}");
     }
-    if (displayFont) {
-      // true — Unbounded (переменный вес), строка — статичный шрифт из fonts/ (например, «rubik-wet-paint»).
-      var file = displayFont === true ? "unbounded" : displayFont, w = displayFont === true ? 600 : 400;
-      if (displayFont === true) faces("Band Restyle Display", "unbounded", ["200 900"]);
-      else [["cyrillic", CYRILLIC], ["latin", LATIN]].forEach(function (sub) {
-        out.push("@font-face{font-family:\"Band Restyle Display\";src:url(\"" + urlFor("fonts/" + file + "-" + sub[0] + "-400-normal.woff2") +
-          "\") format(\"woff2\");font-weight:400;font-style:normal;font-display:swap;unicode-range:" + sub[1] + "}");
+    var df = displayFont && DISPLAY_FONTS[displayFont];
+    if (df) {
+      [["cyrillic", CYRILLIC], ["latin", LATIN]].forEach(function (sub) {
+        out.push("@font-face{font-family:\"Band Restyle Display\";src:url(\"" + urlFor("fonts/" + df.file + "-" + sub[0] + "-" + (df.v ? "wght" : df.w) + "-normal.woff2") +
+          "\") format(\"woff2\");font-weight:" + (df.v ? "200 900" : df.w) + ";font-style:normal;font-display:swap;unicode-range:" + sub[1] + "}");
       });
+      var w = df.v ? 650 : df.w, k = df.size || 1;
       out.push("html .channel-header__top .channel-header__heading,html #channelHeaderTitle,html .channel-header__title strong,html #sidebarTeamMenuButton span" +
         "{font-family:\"Band Restyle Display\",sans-serif!important;font-weight:" + w + "!important;letter-spacing:0}");
-      if (w === 400) out.push(".brs-hello{font-weight:400!important}");
-      out.push("html #sidebarTeamMenuButton span{font-size:15px!important}");
+      out.push(".brs-hello{font-family:\"Band Restyle Display\",sans-serif!important;font-weight:" + w + "!important;font-size:" + Math.round(28 * k) + "px!important}");
+      out.push(".brs-hero.collapsed .brs-hello{font-size:" + Math.round(16 * k) + "px!important}");
+      out.push("html #sidebarTeamMenuButton span{font-size:" + Math.round(15 * k) + "px!important}");
+    } else {
+      out.push(".brs-hello{font-family:\"Band Restyle UI\",\"Open Sans\",sans-serif!important}");
     }
     // Код и моноширинный текст не трогаем.
     out.push("html code,html pre,html kbd,html .post-code{font-family:Menlo,Consolas,\"Courier New\",monospace!important}");
@@ -350,11 +383,9 @@
       if (s.sidebarTone === "light") css.push(lightSidebarCss(th));
       css.push(statusIconsCss());
     }
-    var display = s.displayFont === "on" ? (th && th.displayFont) || true
-      : s.displayFont !== "off" && th && th.displayFont && s.style === "glass" ? th.displayFont : false;
-    css.push(fontCss(s.font, display, urlFor));
+    css.push(fontCss(s.font, displayFontFor(s, th), urlFor));
     return css.join("\n");
   }
 
-  root.BAND_RESTYLE = { THEMES: THEMES, FONTS: FONTS, DEFAULTS: DEFAULTS, buildCss: buildCss, themeFor: themeFor, mix: mix, rgba: rgba };
+  root.BAND_RESTYLE = { THEMES: THEMES, FONTS: FONTS, DISPLAY_FONTS: DISPLAY_FONTS, displayFontFor: displayFontFor, DEFAULTS: DEFAULTS, buildCss: buildCss, themeFor: themeFor, mix: mix, rgba: rgba };
 })(typeof window !== "undefined" ? window : globalThis);
