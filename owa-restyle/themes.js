@@ -67,6 +67,12 @@
       wallpaper: "vice-sunset.webp",
       displayFont: true
     },
+    custom: {
+      name: "Свой цвет",
+      note: "Выбери цвета сама",
+      swatch: ["#E0457B", "#7C5BB0"],
+      custom: true
+    },
     graphite: {
       name: "Графит",
       note: "Тёмная тема (бета)",
@@ -255,10 +261,48 @@
     ].join("\n");
   }
 
+  function hexToRgb(hex) {
+    var h = String(hex || "").replace("#", "");
+    if (h.length === 3) h = h.replace(/./g, "$&$&");
+    var n = parseInt(h, 16);
+    if (!/^[0-9a-f]{6}$/i.test(h)) n = 0xE0457B;
+    return [n >> 16 & 255, n >> 8 & 255, n & 255];
+  }
+
+  function mix(hex, withHex, k) {
+    var a = hexToRgb(hex), b = hexToRgb(withHex);
+    return "#" + a.map(function (v, i) {
+      var x = Math.round(v + (b[i] - v) * k);
+      return (x < 16 ? "0" : "") + x.toString(16);
+    }).join("").toUpperCase();
+  }
+
+  // Своя тема: вся палитра оттенков собирается из одного-двух цветов.
+  function customTheme(c1, c2) {
+    c1 = c1 || "#E0457B";
+    c2 = c2 || c1;
+    return {
+      name: "Свой цвет",
+      t: {
+        darker: mix(c1, "#000000", .45), dark: mix(c1, "#000000", .2), darkAlt: mix(c1, "#000000", .2), primary: mix(c1, "#000000", 0),
+        secondary: mix(c1, "#FFFFFF", .18), tertiary: mix(c1, "#FFFFFF", .45), light: mix(c1, "#FFFFFF", .75),
+        lighter: mix(c1, "#FFFFFF", .87), lighterAlt: mix(c1, "#FFFFFF", .95)
+      },
+      header: "linear-gradient(90deg, " + mix(c1, "#000000", .15) + " 0%, " + c2 + " 100%)",
+      gradient: "linear-gradient(120deg, " + c2 + " 0%, " + c1 + " 100%)",
+      pane: mix(c1, "#FFFFFF", .96)
+    };
+  }
+
+  function themeFor(settings) {
+    if (settings.theme === "custom") return customTheme(settings.customColor, settings.customColor2);
+    return THEMES[settings.theme];
+  }
+
   function buildCss(settings, urlFor, extras) {
     extras = extras || {};
     var css = [];
-    var th = THEMES[settings.theme];
+    var th = themeFor(settings);
     var glass = settings.style === "glass";
     if (th && th.t) {
       css.push(themeColorCss(th.t));
@@ -273,7 +317,8 @@
   root.OWA_RESTYLE = {
     THEMES: THEMES,
     FONTS: FONTS,
-    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 220, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50, greetingName: "", meetings: true, heroLayout: "split", widgetImage: "none", widgetPos: 50 },
-    buildCss: buildCss
+    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 220, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50, greetingName: "", meetings: true, heroLayout: "split", widgetImage: "none", widgetPos: 50, customColor: "#E0457B", customColor2: "#7C5BB0" },
+    buildCss: buildCss,
+    themeFor: themeFor
   };
 })(typeof window !== "undefined" ? window : globalThis);

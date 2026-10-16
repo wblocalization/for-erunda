@@ -265,8 +265,10 @@
     if (extras.readingImage) {
       out.push("html ._n_Y.ors-reading-empty::before{background:url(\"" + extras.readingImage + "\") center " + (+s.readingPos || 50) + "%/cover no-repeat}");
       out.push("html ._n_Y.ors-reading-empty ._n_O2>span.owaimg,html ._n_Y.ors-reading-empty::after{display:none!important}");
-      out.push("html ._n_Y.ors-reading-empty ._n_O2{width:fit-content!important;max-width:90%;margin-left:auto!important;margin-right:auto!important;padding:10px 18px;border-radius:14px;" +
-        "background:rgba(255,255,255,.72);" + bf + ";box-shadow:0 6px 20px rgba(20,10,40,.15);white-space:nowrap}");
+      out.push("html ._n_Y.ors-reading-empty ._n_O2{background:none!important;box-shadow:none!important}");
+      out.push("html ._n_Y.ors-reading-empty ._n_O2 ._n_Q2{display:inline-block!important;width:auto!important;max-width:90%;padding:10px 18px!important;border-radius:14px;" +
+        "background:rgba(255,255,255,.75);" + bf + ";box-shadow:0 6px 20px rgba(20,10,40,.15);white-space:normal;text-align:center;margin:0 auto!important;position:relative!important;left:auto!important;right:auto!important}");
+      out.push("html ._n_Y.ors-reading-empty ._n_O2 ._n_Q2:empty{display:none!important}");
     }
 
     // Приветствие в шапке.

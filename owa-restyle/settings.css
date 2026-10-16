@@ -52,3 +52,7 @@ body.full .walls { grid-template-columns: repeat(4, 1fr); }
 .field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; color: var(--mute); }
 .field input { font: inherit; color: var(--ink); padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; }
 #calStatus { white-space: pre-wrap; user-select: text; word-break: break-word; }
+.colors { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #faf9fc; }
+.colors label { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.colors small { color: var(--mute); font-size: 11px; }
+.colors input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }

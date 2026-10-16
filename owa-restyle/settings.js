@@ -96,7 +96,7 @@
       st.appendChild(b);
     });
 
-    var th = R.THEMES[cur.theme] || {};
+    var th = R.themeFor(cur) || {};
     var walls = $("walls"); walls.innerHTML = "";
     var themeBg = th.wallpaper ? "url(" + th.wallpaper + ")" :
       (th.t ? "linear-gradient(135deg," + th.t.tertiary + "," + th.t.light + "," + th.t.lighterAlt + ")" : "linear-gradient(135deg,#ddd,#f5f5f5)");
@@ -144,13 +144,18 @@
     var themes = $("themes"); themes.innerHTML = "";
     Object.keys(R.THEMES).forEach(function (id) {
       var t = R.THEMES[id];
+      var sw = t.custom ? [cur.customColor || t.swatch[0], cur.customColor2 || t.swatch[1]] : t.swatch;
       var b = btn("theme" + (cur.theme === id ? " on" : ""),
-        '<div class="sw"><span style="background:' + t.swatch[0] + '"></span><span style="background:' + t.swatch[1] + '"></span></div><b></b><small></small>');
+        '<div class="sw"><span style="background:' + sw[0] + '"></span><span style="background:' + sw[1] + '"></span></div><b></b><small></small>');
       b.querySelector("b").textContent = t.name;
       b.querySelector("small").textContent = t.note || "";
       b.onclick = function () { save({ theme: id }); };
       themes.appendChild(b);
     });
+
+    $("customColors").hidden = cur.theme !== "custom";
+    if (document.activeElement !== $("customColor")) $("customColor").value = cur.customColor || "#E0457B";
+    if (document.activeElement !== $("customColor2")) $("customColor2").value = cur.customColor2 || "#7C5BB0";
 
     var fonts = $("fonts"); fonts.innerHTML = "";
     Object.keys(R.FONTS).forEach(function (id) {
@@ -242,6 +247,15 @@
   });
   document.querySelectorAll(".toggles input").forEach(function (cb) {
     cb.onchange = function () { var p = {}; p[cb.dataset.key] = cb.checked; save(p); };
+  });
+
+  ["customColor", "customColor2"].forEach(function (k) {
+    var timer = null;
+    $(k).oninput = function () {
+      var v = this.value;
+      clearTimeout(timer);
+      timer = setTimeout(function () { var p = {}; p[k] = v; save(p); }, 250);
+    };
   });
 
   var nameTimer = null;
