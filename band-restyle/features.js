@@ -124,13 +124,16 @@
     return String(settings.statusPresets || "").split("\n").map(function (line) {
       var p = line.split("|").map(function (x) { return x.trim(); });
       if (p.length < 2 || !p[1]) return null;
-      return { emoji: p[0] || "speech_balloon", text: p[1], minutes: parseInt(p[2], 10) || 0 };
+      var forever = /^(0|навсегда|вечно|forever|∞|-)$/i.test(p[2] || "");
+      return { emoji: p[0] || "speech_balloon", text: p[1], minutes: forever ? 0 : parseInt(p[2], 10) || 0, forever: forever };
     }).filter(Boolean).slice(0, 6);
   }
 
   function setStatus(pr) {
     var body = { emoji: pr.emoji, text: pr.text };
-    if (pr.minutes) {
+    if (pr.forever) {
+      body.duration = "dont_clear"; // «Не очищать» — статус висит, пока его не сбросят
+    } else if (pr.minutes) {
       body.duration = "date_and_time";
       body.expires_at = new Date(Date.now() + pr.minutes * 60000).toISOString();
     } else {
@@ -140,7 +143,7 @@
     }
     return api("/users/me/status/custom", "PUT", body).then(function () {
       cache.me = null;
-      toast((EMOJI[pr.emoji] || "💬") + " Статус: " + pr.text + (pr.minutes ? " до " + hhmm(new Date(Date.now() + pr.minutes * 60000)) : " до конца дня"));
+      toast((EMOJI[pr.emoji] || "💬") + " Статус: " + pr.text + (pr.forever ? " — без срока" : pr.minutes ? " до " + hhmm(new Date(Date.now() + pr.minutes * 60000)) : " до конца дня"));
     }, function (e) { toast("Не получилось поставить статус (" + e.message + ")"); });
   }
 
@@ -252,7 +255,7 @@
     list.forEach(function (pr) {
       var b = el("button", "brs-st");
       b.appendChild(el("span", "", EMOJI[pr.emoji] || "💬"));
-      b.appendChild(document.createTextNode(" " + pr.text + (pr.minutes ? " · " + (pr.minutes % 60 ? pr.minutes + " мин" : pr.minutes / 60 + " ч") : "")));
+      b.appendChild(document.createTextNode(" " + pr.text + (pr.forever ? " · ∞" : pr.minutes ? " · " + (pr.minutes % 60 ? pr.minutes + " мин" : pr.minutes / 60 + " ч") : "")));
       b.title = "Поставить статус «" + pr.text + "»";
       b.onclick = function () { setStatus(pr); };
       box.appendChild(b);
