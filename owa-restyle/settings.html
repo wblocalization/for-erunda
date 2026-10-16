@@ -27,13 +27,22 @@
 
     <section id="glassOnly3">
       <h2>Шапка</h2>
+      <div id="heroLayouts" class="seg"></div>
       <div class="sliders">
         <label>Высота шапки <input id="heroHeight" type="range" min="50" max="320" step="10"></label>
       </div>
       <div id="heroWrap">
+        <p class="sub">Картинка баннера</p>
         <div id="heroes" class="walls"></div>
         <div class="sliders">
           <label>Сдвиг картинки ↕ <input id="heroPos" type="range" min="0" max="100" step="1"></label>
+        </div>
+        <div id="widgetWrap">
+          <p class="sub">Картинка виджета справа (приветствие, дата, созвоны)</p>
+          <div id="widgets" class="walls"></div>
+          <div class="sliders" id="widgetPosWrap">
+            <label>Сдвиг картинки ↕ <input id="widgetPos" type="range" min="0" max="100" step="1"></label>
+          </div>
         </div>
       </div>
     </section>

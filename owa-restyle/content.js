@@ -29,12 +29,14 @@
           settings = s;
           var hero = s.heroImage && s.heroImage !== "wallpaper" &&
             (local.images || []).filter(function (i) { return i.id === s.heroImage; })[0];
+          var widget = s.widgetImage && s.widgetImage !== "none" &&
+            (local.images || []).filter(function (i) { return i.id === s.widgetImage; })[0];
           var reading = s.readingImage && s.readingImage !== "none" &&
             (local.images || []).filter(function (i) { return i.id === s.readingImage; })[0];
           // В календаре OWA вёрстка завязана на ширину Segoe UI — там оставляем родной шрифт.
           var css = isCalendar() ? Object.assign({}, s, { font: "original" }) : s;
           style.textContent = R.buildCss(css, urlFor, { wallpaper: wall, emptyImage: local.emptyImage,
-            heroImage: hero ? hero.data : null, readingImage: reading ? reading.data : null });
+            heroImage: hero ? hero.data : null, readingImage: reading ? reading.data : null, widgetImage: widget ? widget.data : null });
           document.documentElement.classList.toggle("ors-glass", s.style === "glass");
           schedule();
         });
@@ -150,39 +152,45 @@
       setText(greet, hello + " ✨");
     } else if (greet) greet.remove();
 
-    // Крупный текст на баннере.
+    // Текст шапки: в режиме «баннер + виджет» он живёт в виджете справа, в режиме «широкая» — на баннере.
+    var H = +settings.heroHeight || 50;
+    var split = settings.heroLayout !== "wide" && H >= 150;
+    var meetOn = heroOn && settings.meetings !== false && !!window.OWA_RESTYLE_MEETINGS;
     var headerView = document.getElementById("primaryHeaderView");
     var hero = document.querySelector(".ors-hero");
-    if (heroOn && greetOn && headerView) {
+    if (heroOn && (greetOn || meetOn || split) && headerView) {
       if (!hero) {
         hero = document.createElement("div");
         hero.className = "ors-hero";
-        hero.appendChild(document.createElement("b"));
-        hero.appendChild(document.createElement("span"));
+        ["b", "span", "span", "div"].forEach(function (tag) { hero.appendChild(document.createElement(tag)); });
+        hero.children[1].className = "ors-date";
+        hero.children[2].className = "ors-sum";
+        hero.children[3].className = "ors-meet";
         headerView.appendChild(hero);
       }
       var n = inboxUnread();
       var sub = DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()] +
-        (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + " во входящих" : "");
+        (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + (split ? "" : " во входящих") : "");
+      hero.children[0].hidden = !greetOn;
       setText(hero.children[0], hello + " ✨");
-      setText(hero.children[1], sub + (meetSummary ? " · " + meetSummary : ""));
-    } else if (hero) hero.remove();
-
-    // Встречи на сегодня — справа на баннере.
-    var meetBox = document.querySelector(".ors-meet");
-    if (heroOn && settings.meetings !== false && headerView && window.OWA_RESTYLE_MEETINGS) {
-      if (!meetBox) {
-        meetBox = document.createElement("div");
-        meetBox.className = "ors-meet";
-        headerView.appendChild(meetBox);
+      setText(hero.children[1], sub);
+      setText(hero.children[2], meetOn ? meetSummary : "");
+      hero.children[2].hidden = !meetOn || !meetSummary;
+      var meetBox = hero.children[3];
+      if (meetOn) {
+        var max = split ? (H >= 250 ? 3 : H >= 210 ? 2 : 1) : (H >= 150 ? 3 : 1);
+        window.OWA_RESTYLE_MEETINGS.load().then(function (items) {
+          renderMeetings(meetBox, items, max, !split);
+          var s = summarize(items, split);
+          if (s !== meetSummary) { meetSummary = s; schedule(); }
+        });
+      } else {
+        meetBox.textContent = "";
+        meetBox.removeAttribute("data-html");
+        meetSummary = "";
       }
-      window.OWA_RESTYLE_MEETINGS.load().then(function (items) {
-        renderMeetings(meetBox, items);
-        var s = summarize(items);
-        if (s !== meetSummary) { meetSummary = s; schedule(); }
-      });
     } else {
-      if (meetBox) meetBox.remove();
+      if (hero) hero.remove();
       meetSummary = "";
     }
   }
@@ -194,7 +202,7 @@
   function short(s) { return s.length > 40 ? s.slice(0, 39) + "…" : s; }
 
   // Сводка для строки под приветствием.
-  function summarize(items) {
+  function summarize(items, split) {
     if (!items) return "";
     var now = new Date();
     var timed = items.filter(function (m) { return !m.allDay; });
@@ -202,9 +210,11 @@
     var current = timed.filter(function (m) { return m.start <= now && m.end > now; })[0];
     var upcoming = timed.filter(function (m) { return m.start > now; });
     if (current) {
+      if (split) return "Сегодня " + calls(timed.length) + ", сейчас идёт:";
       return "Сейчас созвон «" + short(current.subject) + "»" + (upcoming.length ? ", потом ещё " + calls(upcoming.length) : "");
     }
     if (!upcoming.length) return "Созвоны на сегодня закончились 🎉";
+    if (split) return "Сегодня " + calls(timed.length) + (upcoming.length < timed.length ? ", осталось " + upcoming.length : "") + ":";
     return calls(timed.length) + " сегодня, " + (upcoming.length < timed.length ? "следующий" : "ближайший") + " в " + hhmm(upcoming[0].start);
   }
 
@@ -217,27 +227,26 @@
     return "через " + h + " ч" + (r ? " " + r + " мин" : "");
   }
 
-  function renderMeetings(box, items) {
+  function renderMeetings(box, items, max, showDone) {
     if (!items) { if (box.childNodes.length) box.textContent = ""; return; } // не загрузилось — молчим
     var now = new Date();
-    var big = (+settings.heroHeight || 50) >= 150;
+    var big = max > 1;
     var allDay = items.filter(function (m) { return m.allDay; });
     var left = items.filter(function (m) { return !m.allDay && m.end > now; });
-    var max = big ? 3 : 1;
     var html = [];
     function chip(cls, time, subject, tail, title) {
       return '<a class="ors-chip ' + cls + '" href="/owa/#path=/calendar" title="' + esc(title) + '"><i>' + esc(time) + "</i><b>" +
         esc(subject) + "</b>" + (tail ? "<em>" + esc(tail) + "</em>" : "") + "</a>";
     }
-    var show = max === 1 ? 1 : (left.length > max ? max - 1 : max);
+    var show = (max === 1 || !showDone) ? Math.min(max, left.length) : (left.length > max ? max - 1 : max);
     left.slice(0, show).forEach(function (m, i) {
       var nowOn = m.start <= now;
       var tail = nowOn ? "сейчас" : (i === 0 || (left[0].start <= now && i === 1)) ? inMinutes(m.start - now) : "";
       html.push(chip(nowOn ? "now" : (tail ? "next" : ""), hhmm(m.start) + "–" + hhmm(m.end), m.subject, tail,
         m.subject + (m.location ? " · " + m.location : "")));
     });
-    if (left.length > show && max > 1) html.push('<a class="ors-chip more" href="/owa/#path=/calendar"><b>ещё ' + calls(left.length - show) + "</b></a>");
-    if (!left.length) {
+    if (left.length > show && max > 1 && showDone) html.push('<a class="ors-chip more" href="/owa/#path=/calendar"><b>ещё ' + calls(left.length - show) + "</b></a>");
+    if (!left.length && showDone) {
       html.push('<a class="ors-chip done" href="/owa/#path=/calendar"><b>' +
         (items.length - allDay.length ? "Созвоны на сегодня закончились 🎉" : "Сегодня без созвонов 🎉") + "</b></a>");
     }
@@ -315,7 +324,7 @@
     new MutationObserver(function (muts) {
       for (var i = 0; i < muts.length; i++) {
         var n = muts[i].target;
-        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet") || n.classList.contains("ors-hero") || n.classList.contains("ors-meet") || (n.closest && n.closest(".ors-meet")) || (n.parentElement && n.parentElement.classList && n.parentElement.classList.contains("ors-hero")))) continue;
+        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet") || n.classList.contains("ors-hero") || (n.closest && n.closest(".ors-hero")) || (n.parentElement && n.parentElement.classList && n.parentElement.classList.contains("ors-hero")))) continue;
         schedule();
         return;
       }

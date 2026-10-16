@@ -110,6 +110,18 @@
     out.push("html ._n_q1::before{content:\"\";position:absolute;inset:0;border-radius:14px;background:var(--ors-glass);" + bf +
       ";box-shadow:inset 0 0 0 1px var(--ors-glass-line);z-index:-1;pointer-events:none}");
     out.push("html ._fce_a{border-bottom:0!important}");
+    // Кнопки на панели: ровная высота 32px по центру «пилюли», «Создать» — аккуратная кнопка с отдельной стрелкой.
+    out.push("html ._n_q1 ._n_r1,html ._n_q1 ._fce_a{height:100%!important;box-sizing:border-box}");
+    out.push("html ._n_q1 ._fce_a{display:flex!important;align-items:center;padding:0 6px!important}");
+    out.push("html ._n_q1 ._fce_b{display:flex!important;align-items:center;height:auto!important}");
+    out.push("html ._n_q1 ._fce_e{display:inline-flex!important;align-items:center;height:32px!important;margin:0 2px!important;padding:0!important;vertical-align:middle;border-radius:10px!important;overflow:hidden}");
+    out.push("html ._n_q1 ._fce_e>button{height:32px!important;line-height:32px!important;margin:0!important;padding:0 10px!important;display:inline-flex!important;align-items:center;gap:6px;border-radius:10px}");
+    out.push("html ._n_q1 ._fce_e>button:hover{background:rgba(255,255,255,.55)!important}");
+    out.push("html ._n_q1 ._fce_e>button .owaimg{line-height:1!important;margin:0!important;vertical-align:middle}");
+    out.push("html ._n_q1 button[title^=\"Создать новое сообщение\"]{padding:0 14px 0 12px!important;border-radius:10px 0 0 10px!important;color:#fff!important;font-weight:600!important}");
+    out.push("html ._n_q1 button[title^=\"Создать новое сообщение\"] ~ button[title^=\"Отобразить больше новых\"]{width:34px!important;padding:0!important;justify-content:center;border-radius:0 10px 10px 0!important;" +
+      "border-left:1px solid rgba(255,255,255,.35)!important}");
+    out.push("html ._n_q1 ._fce_e:has(button[title^=\"Создать новое сообщение\"]){box-shadow:0 2px 8px " + rgba(t.primary, .3) + ";margin-right:8px!important}");
 
     // Внутри карточек всё, что было белым/серым, — прозрачное.
     out.push([
@@ -193,28 +205,57 @@
       out.push("html #primaryHeaderView{height:" + H + "px!important;z-index:1}");
       out.push(["inset: 50px", "inset:50px", "top: 50px", "top:50px"].map(function (v) { return "html #primaryContainer>div[style*=\"" + v + "\"],html #primaryContainer>a[style*=\"" + v + "\"]"; }).join(",") + "{top:" + H + "px!important}");
       out.push("html ._n_c{height:" + H + "px!important}");
-      out.push("html #primaryHeaderView::before{content:\"\";position:absolute;inset:8px 8px 0 8px;border-radius:22px;z-index:-1;pointer-events:none;" +
-        "background:linear-gradient(180deg,rgba(0,0,0,.28) 0,rgba(0,0,0,0) 70px),linear-gradient(0deg,rgba(0,0,0,.36) 0,rgba(0,0,0,0) 65%)," + heroBg + ";" +
-        "box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px rgba(20,10,40,.15)}");
+      var split = s.heroLayout !== "wide" && H >= 150;
+      var card = "border-radius:22px;z-index:-1;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px rgba(20,10,40,.15)";
+      var shade = "linear-gradient(180deg,rgba(0,0,0,.28) 0,rgba(0,0,0,0) 70px),linear-gradient(0deg,rgba(0,0,0,.36) 0,rgba(0,0,0,0) 65%),";
+      out.push(":root{--ors-w:min(470px,38vw)}");
+      out.push("html #primaryHeaderView::before{content:\"\";position:absolute;" +
+        (split ? "inset:8px calc(var(--ors-w) + 16px) 0 8px;" : "inset:8px 8px 0 8px;") + card + ";background:" + shade + heroBg + "}");
       out.push("html #O365_NavHeader,html #O365_NavHeader.o365cs-topnavBGImage,html .o365cs-topnavBGColor-2{background:transparent!important;margin:8px 8px 0;border-radius:22px 22px 0 0}");
-      out.push("html .ors-hero{position:absolute;left:36px;right:36px;bottom:20px;color:#fff;pointer-events:none;text-shadow:0 2px 12px rgba(0,0,0,.35)}");
-      out.push("html .ors-hero b{display:block;font:700 " + (H >= 150 ? 34 : 24) + "px/1.15 var(--ors-display, var(--ors-font, \"Segoe UI\", sans-serif));letter-spacing:-.01em}");
-      out.push("html .ors-hero span{display:block;margin-top:6px;font:500 15px/1.3 var(--ors-font, \"Segoe UI\", sans-serif);opacity:.92}");
-      if (H < 110) out.push("html .ors-hero span{display:none}");
-      out.push("html .ors-hero{right:330px}");
-      out.push("html .ors-meet{position:absolute;right:28px;bottom:18px;z-index:1;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:300px}");
-      out.push("html .ors-chip{display:flex;align-items:center;gap:8px;max-width:300px;padding:6px 12px;border-radius:12px;text-decoration:none!important;color:#fff!important;" +
+
+      // Общий вид текста и плашек созвонов.
+      out.push("html .ors-hero{position:absolute;color:#fff;pointer-events:none;text-shadow:0 2px 12px rgba(0,0,0,.35)}");
+      out.push("html .ors-hero>b{display:block;letter-spacing:-.01em;font-family:var(--ors-display, var(--ors-font, \"Segoe UI\", sans-serif));font-weight:700}");
+      out.push("html .ors-hero>span{display:block;font-family:var(--ors-font, \"Segoe UI\", sans-serif)}");
+      out.push("html .ors-hero>.ors-date{opacity:.92;font-weight:500}");
+      out.push("html .ors-hero>.ors-sum{font-weight:600}");
+      out.push("html .ors-hero [hidden]{display:none!important}");
+      out.push("html .ors-meet{display:flex;flex-direction:column;gap:5px}");
+      out.push("html .ors-chip{pointer-events:auto;display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:12px;text-decoration:none!important;color:#fff!important;" +
         "background:rgba(255,255,255,.18);box-shadow:inset 0 0 0 1px rgba(255,255,255,.28);" + bf + ";font:500 13px/1.25 var(--ors-font, \"Segoe UI\", sans-serif);" +
-        "text-shadow:0 1px 4px rgba(0,0,0,.25);transition:background-color .15s}");
+        "text-shadow:0 1px 4px rgba(0,0,0,.25);transition:background-color .15s;min-width:0}");
       out.push("html .ors-chip:hover{background:rgba(255,255,255,.3)}");
       out.push("html .ors-chip i{font-style:normal;font-weight:600;opacity:.85;white-space:nowrap}");
-      out.push("html .ors-chip b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}");
+      out.push("html .ors-chip b{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}");
       out.push("html .ors-chip em{font-style:normal;white-space:nowrap;padding:2px 8px;border-radius:8px;background:rgba(255,255,255,.22);font-size:12px}");
       out.push("html .ors-chip.now{background:" + rgba(t.primary, .82) + ";box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),0 0 0 3px " + rgba(t.primary, .25) + "}");
       out.push("html .ors-chip.now em{background:#fff;color:" + t.dark + ";text-shadow:none;animation:orsPulse 2s ease-in-out infinite}");
       out.push("@keyframes orsPulse{50%{opacity:.6}}");
       out.push("html .ors-chip.allday i,html .ors-chip.more b,html .ors-chip.done b{opacity:.9}");
-      if (H < 150) out.push("html .ors-meet{bottom:auto;top:50%;transform:translateY(-10%)}");
+
+      if (split) {
+        // Виджет справа: своя картинка или градиент темы, внутри — кнопки OWA, приветствие и созвоны.
+        var widgetBg = extras.widgetImage
+          ? "linear-gradient(0deg,rgba(0,0,0,.55) 0,rgba(0,0,0,.18) 60%,rgba(0,0,0,.3) 100%),url(\"" + extras.widgetImage + "\") center " + (+s.widgetPos || 50) + "%/cover no-repeat"
+          : "linear-gradient(135deg," + rgba(t.darker, .86) + "," + rgba(t.primary, .74) + ")";
+        out.push("html #primaryHeaderView::after{content:\"\";position:absolute;top:8px;right:8px;bottom:0;width:var(--ors-w);" + card + ";background:" + widgetBg + ";" + bf + "}");
+        out.push("html .ors-hero{left:auto;right:28px;width:calc(var(--ors-w) - 40px);top:60px;bottom:14px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}");
+        out.push("html .ors-hero>b{font-size:" + (H >= 240 ? 24 : 21) + "px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}");
+        out.push("html .ors-hero>.ors-date{margin-top:4px;font-size:13px}");
+        out.push("html .ors-hero>.ors-sum{margin-top:8px;font-size:13px}");
+        out.push("html .ors-hero>*{flex:none}");
+        out.push("html .ors-meet{margin-top:6px}");
+        out.push("html .ors-chip{padding:5px 10px;font-size:12.5px}");
+      } else {
+        out.push("html .ors-hero{left:36px;right:330px;bottom:20px}");
+        out.push("html .ors-hero>b{font-size:" + (H >= 150 ? 34 : 24) + "px;line-height:1.15}");
+        out.push("html .ors-hero>.ors-date,html .ors-hero>.ors-sum{margin-top:6px;font-size:15px;line-height:1.3}");
+        out.push("html .ors-hero>.ors-sum{margin-top:2px}");
+        if (H < 110) out.push("html .ors-hero>.ors-date,html .ors-hero>.ors-sum{display:none}");
+        out.push("html .ors-meet{position:absolute;right:-302px;bottom:-2px;width:300px;align-items:flex-end}");
+        out.push("html .ors-chip{max-width:300px}");
+        if (H < 150) out.push("html .ors-meet{bottom:auto;top:50%;transform:translateY(-50%)}");
+      }
     }
 
     // Своя картинка в пустой области чтения (пока письмо не открыто).

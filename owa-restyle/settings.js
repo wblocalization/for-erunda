@@ -59,6 +59,26 @@
     return b;
   }
 
+  // Галерея «своих» картинок для одного места (шапка, виджет, область чтения).
+  function gallery(id, key, noneLabel, noneValue, posKey) {
+    var box = $(id); box.innerHTML = "";
+    var none = wallTile(noneLabel, null, !cur[key] || cur[key] === noneValue, function () { var p = {}; p[key] = noneValue; save(p); });
+    none.style.background = "repeating-linear-gradient(45deg,#f1eff6 0 8px,#fafafa 8px 16px)";
+    none.querySelector("span").style.color = "#6b7280";
+    none.querySelector("span").style.background = "none";
+    box.appendChild(none);
+    (local.images || []).forEach(function (img) {
+      var tile = wallTile(img.name || "Моя картинка", "url(" + img.data + ")", cur[key] === img.id, function () { var p = {}; p[key] = img.id; save(p); });
+      tile.style.backgroundPosition = "center " + cur[posKey] + "%";
+      box.appendChild(tile);
+    });
+    var add = wallTile("+ Загрузить", null, false, function () {
+      if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = key; $("wallFile").click(); }
+    });
+    add.classList.add("add");
+    box.appendChild(add);
+  }
+
   function render() {
     var glass = cur.style === "glass";
     $("glassOnly").hidden = !glass;
@@ -90,6 +110,7 @@
           if (cur.wallpaper === img.id) save({ wallpaper: "theme" });
           if (cur.heroImage === img.id) save({ heroImage: "wallpaper" });
           if (cur.readingImage === img.id) save({ readingImage: "none" });
+          if (cur.widgetImage === img.id) save({ widgetImage: "none" });
         }));
     });
     var add = wallTile("+ Загрузить свою", null, false, function () {
@@ -98,41 +119,22 @@
     add.classList.add("add");
     walls.appendChild(add);
 
-    var heroes = $("heroes"); heroes.innerHTML = "";
-    heroes.appendChild(wallTile("Как фон", null, cur.heroImage === "wallpaper", function () { save({ heroImage: "wallpaper" }); }));
-    heroes.firstChild.style.background = "repeating-linear-gradient(45deg,#f1eff6 0 8px,#fafafa 8px 16px)";
-    heroes.firstChild.querySelector("span").style.color = "#6b7280";
-    heroes.firstChild.querySelector("span").style.background = "none";
-    (local.images || []).forEach(function (img) {
-      var tile = wallTile(img.name || "Моя картинка", "url(" + img.data + ")", cur.heroImage === img.id, function () { save({ heroImage: img.id }); });
-      tile.style.backgroundPosition = "center " + cur.heroPos + "%";
-      heroes.appendChild(tile);
-    });
-    var addHero = wallTile("+ Загрузить", null, false, function () {
-      if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = "heroImage"; $("wallFile").click(); }
-    });
-    addHero.classList.add("add");
-    heroes.appendChild(addHero);
-    var readings = $("readings"); readings.innerHTML = "";
-    var none = wallTile("Без картинки", null, cur.readingImage === "none" || !cur.readingImage, function () { save({ readingImage: "none" }); });
-    none.style.background = "repeating-linear-gradient(45deg,#f1eff6 0 8px,#fafafa 8px 16px)";
-    none.querySelector("span").style.color = "#6b7280";
-    none.querySelector("span").style.background = "none";
-    readings.appendChild(none);
-    (local.images || []).forEach(function (img) {
-      var tile = wallTile(img.name || "Моя картинка", "url(" + img.data + ")", cur.readingImage === img.id, function () { save({ readingImage: img.id }); });
-      tile.style.backgroundPosition = "center " + cur.readingPos + "%";
-      readings.appendChild(tile);
-    });
-    var addReading = wallTile("+ Загрузить", null, false, function () {
-      if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = "readingImage"; $("wallFile").click(); }
-    });
-    addReading.classList.add("add");
-    readings.appendChild(addReading);
+    gallery("heroes", "heroImage", "Как фон", "wallpaper", "heroPos");
+    gallery("widgets", "widgetImage", "Цвет темы", "none", "widgetPos");
+    gallery("readings", "readingImage", "Без картинки", "none", "readingPos");
     $("readingPosWrap").hidden = !cur.readingImage || cur.readingImage === "none";
-    $("readingPos").value = cur.readingPos;
+    $("widgetPosWrap").hidden = !cur.widgetImage || cur.widgetImage === "none";
+    $("widgetWrap").hidden = cur.heroLayout === "wide" || (+cur.heroHeight || 50) < 150;
 
-    if (document.activeElement !== $("greetingName")) $("greetingName").value = cur.greetingName || "";
+    var lay = $("heroLayouts"); lay.innerHTML = "";
+    [["split", "Баннер + виджет", "Картинка слева, приветствие и созвоны справа"], ["wide", "Один баннер", "Картинка на всю ширину"]].forEach(function (o) {
+      var b = btn((cur.heroLayout || "split") === o[0] ? "on" : "", "<b></b><small></small>");
+      b.querySelector("b").textContent = o[1];
+      b.querySelector("small").textContent = o[2];
+      b.onclick = function () { save({ heroLayout: o[0] }); };
+      lay.appendChild(b);
+    });
+
     $("heroHeight").value = cur.heroHeight;
     $("heroPos").value = cur.heroPos;
 
@@ -230,7 +232,7 @@
   $("emptyReset").onclick = function () { saveLocal({ emptyImage: null }); };
   $("openFull").onclick = function () { chrome.runtime.openOptionsPage(); };
 
-  ["dim", "blur", "heroHeight", "heroPos", "readingPos"].forEach(function (k) {
+  ["dim", "blur", "heroHeight", "heroPos", "readingPos", "widgetPos"].forEach(function (k) {
     var timer = null;
     $(k).oninput = function () {
       var v = +this.value;
