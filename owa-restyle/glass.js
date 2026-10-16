@@ -229,7 +229,7 @@
     out.push("html #O365_NavHeader .o365cs-nav-o365Branding,html #O365_NavHeader .o365cs-nav-appTitle{text-decoration:none!important;border:0!important;box-shadow:none!important;padding-left:6px!important;margin:0!important}");
     // Аватарка: сама кнопка — кружок 40×40, фото заполняет его целиком, обводка рисуется внутри (её не обрежут контейнеры OWA).
     out.push("html #O365_NavHeader button._ho2_2{position:relative!important;flex:none;width:40px!important;height:40px!important;min-width:0!important;padding:0!important;" +
-      "margin:0 2px 0 6px!important;border:0!important;border-radius:50%!important;overflow:hidden!important;background:rgba(255,255,255,.2)!important;box-shadow:none!important;vertical-align:middle}");
+      "margin:0 16px 0 8px!important;border:0!important;border-radius:50%!important;overflow:hidden!important;background:rgba(255,255,255,.2)!important;box-shadow:none!important;vertical-align:middle}");
     out.push("html #O365_NavHeader button._ho2_2::after{content:\"\";position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 2px rgba(255,255,255,.9);pointer-events:none}");
     out.push("html #O365_NavHeader button._ho2_2:hover::after{box-shadow:inset 0 0 0 2px #fff,inset 0 0 0 40px rgba(255,255,255,.12)}");
     out.push("html #O365_NavHeader button._ho2_2 ._pe_62,html #O365_NavHeader button._ho2_2 ._pe_g{display:none!important}");
