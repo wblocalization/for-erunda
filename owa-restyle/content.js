@@ -165,7 +165,7 @@
       var sub = DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()] +
         (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + " во входящих" : "");
       setText(hero.children[0], hello + " ✨");
-      setText(hero.children[1], sub);
+      setText(hero.children[1], sub + (meetSummary ? " · " + meetSummary : ""));
     } else if (hero) hero.remove();
 
     // Встречи на сегодня — справа на баннере.
@@ -176,8 +176,36 @@
         meetBox.className = "ors-meet";
         headerView.appendChild(meetBox);
       }
-      window.OWA_RESTYLE_MEETINGS.load().then(function (items) { renderMeetings(meetBox, items); });
-    } else if (meetBox) meetBox.remove();
+      window.OWA_RESTYLE_MEETINGS.load().then(function (items) {
+        renderMeetings(meetBox, items);
+        var s = summarize(items);
+        if (s !== meetSummary) { meetSummary = s; schedule(); }
+      });
+    } else {
+      if (meetBox) meetBox.remove();
+      meetSummary = "";
+    }
+  }
+
+  var meetSummary = "";
+
+  function calls(n) { return n + " " + plural(n, "созвон", "созвона", "созвонов"); }
+
+  function short(s) { return s.length > 40 ? s.slice(0, 39) + "…" : s; }
+
+  // Сводка для строки под приветствием.
+  function summarize(items) {
+    if (!items) return "";
+    var now = new Date();
+    var timed = items.filter(function (m) { return !m.allDay; });
+    if (!timed.length) return "Сегодня без созвонов 🎉";
+    var current = timed.filter(function (m) { return m.start <= now && m.end > now; })[0];
+    var upcoming = timed.filter(function (m) { return m.start > now; });
+    if (current) {
+      return "Сейчас созвон «" + short(current.subject) + "»" + (upcoming.length ? ", потом ещё " + calls(upcoming.length) : "");
+    }
+    if (!upcoming.length) return "Созвоны на сегодня закончились 🎉";
+    return calls(timed.length) + " сегодня, " + (upcoming.length < timed.length ? "следующий" : "ближайший") + " в " + hhmm(upcoming[0].start);
   }
 
   function hhmm(d) { return d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes(); }
@@ -208,10 +236,10 @@
       html.push(chip(nowOn ? "now" : (tail ? "next" : ""), hhmm(m.start) + "–" + hhmm(m.end), m.subject, tail,
         m.subject + (m.location ? " · " + m.location : "")));
     });
-    if (left.length > show && max > 1) html.push('<a class="ors-chip more" href="/owa/#path=/calendar"><b>ещё ' + (left.length - show) + "</b></a>");
+    if (left.length > show && max > 1) html.push('<a class="ors-chip more" href="/owa/#path=/calendar"><b>ещё ' + calls(left.length - show) + "</b></a>");
     if (!left.length) {
       html.push('<a class="ors-chip done" href="/owa/#path=/calendar"><b>' +
-        (items.length - allDay.length ? "На сегодня встречи закончились 🎉" : "Сегодня без встреч 🎉") + "</b></a>");
+        (items.length - allDay.length ? "Созвоны на сегодня закончились 🎉" : "Сегодня без созвонов 🎉") + "</b></a>");
     }
     if (big && allDay.length && html.length < 4) html.unshift(chip("allday", "весь день", allDay[0].subject, "", allDay[0].subject));
     var out = html.join("");
