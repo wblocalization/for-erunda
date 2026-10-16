@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>OWA Restyle — настройки</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Вид почты</h1>
+      <button id="openFull" class="link" hidden>Все настройки ↗</button>
+    </header>
+
+    <h2>Стиль</h2>
+    <div id="styles" class="seg"></div>
+
+    <section id="glassOnly">
+      <h2>Фон</h2>
+      <div id="walls" class="walls"></div>
+      <input id="wallFile" type="file" accept="image/*" multiple hidden>
+      <div class="sliders">
+        <label>Затемнение <input id="dim" type="range" min="0" max="50" step="1"></label>
+        <label>Размытие стекла <input id="blur" type="range" min="0" max="40" step="1"></label>
+      </div>
+    </section>
+
+    <h2>Тема</h2>
+    <div id="themes" class="grid"></div>
+
+    <h2>Шрифт интерфейса</h2>
+    <div id="fonts" class="list"></div>
+
+    <section id="glassOnly2">
+      <h2>Украшения</h2>
+      <div class="toggles">
+        <label><input type="checkbox" data-key="avatars"> Аватарки с инициалами в списке писем</label>
+        <label><input type="checkbox" data-key="folderIcons"> Иконки у папок</label>
+        <label><input type="checkbox" data-key="greeting"> Приветствие в шапке</label>
+      </div>
+
+      <h2>Картинка для пустых мест</h2>
+      <div class="emptyRow">
+        <div id="emptyPreview" class="emptyPreview"></div>
+        <div class="emptyBtns">
+          <button id="emptyUpload">Загрузить свою</button>
+          <button id="emptyReset" class="link">Вернуть стандартную</button>
+        </div>
+      </div>
+      <input id="emptyFile" type="file" accept="image/*" hidden>
+    </section>
+
+    <p class="hint">Письма остаются в шрифтах Outlook — меняется только интерфейс. Свои картинки хранятся только в этом браузере.</p>
+  </main>
+  <script src="themes.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

@@ -53,6 +53,20 @@
       header: "linear-gradient(90deg, #6A5ACD 0%, #9483E8 100%)",
       pane: "#F7F6FC"
     },
+    vice: {
+      name: "Вайс-Сити",
+      note: "Закат, пальмы, неон",
+      swatch: ["#7C5BB0", "#F29A96"],
+      t: {
+        darker: "#6E1F5E", dark: "#A3307E", darkAlt: "#A3307E", primary: "#C23F8C",
+        secondary: "#D45E9E", tertiary: "#E79AC2", light: "#F5D2E5", lighter: "#FAE6F0", lighterAlt: "#FEF5F9"
+      },
+      header: "linear-gradient(90deg, #4A3E9C 0%, #9A5AAE 45%, #E9818F 80%, #F7A777 100%)",
+      gradient: "linear-gradient(120deg, #F7A777 0%, #E5638F 45%, #8E5BC0 100%)",
+      pane: "#FBF5FA",
+      wallpaper: "vice-sunset.webp",
+      displayFont: true
+    },
     graphite: {
       name: "Графит",
       note: "Тёмная тема (бета)",
@@ -182,8 +196,8 @@
       "html #O365_NavHeader .o365cs-nav-button:hover{background-color:rgba(255,255,255,.18)!important}",
 
       // Левая панель (поиск + папки).
-      "html ._n_a.ms-bgc-nlr,html ._n_X.hiddenOverflow.ms-bgc-nlr{background-color:var(--ors-pane)!important}",
-      "html ._n_a .ms-bgc-tlr,html ._n_X.hiddenOverflow .ms-bgc-tlr{background-color:transparent!important}",
+      "html div[autoid=\"_n_a\"].ms-bgc-nlr{background-color:var(--ors-pane)!important}",
+      "html div[autoid=\"_n_a\"] .ms-bgc-tlr{background-color:transparent!important}",
       // Поиск: скруглённое поле.
       "html button._n_j{background-color:#FFFFFF!important;border:1px solid var(--ors-line)!important;border-radius:8px!important;margin:10px 12px!important;width:calc(100% - 24px)!important;box-sizing:border-box;box-shadow:0 1px 2px rgba(0,0,0,.04)}",
       "html button._n_j:hover{border-color:var(--ors-accent-light)!important}",
@@ -241,22 +255,25 @@
     ].join("\n");
   }
 
-  function buildCss(themeId, fontId, urlFor) {
+  function buildCss(settings, urlFor, extras) {
+    extras = extras || {};
     var css = [];
-    var th = THEMES[themeId];
+    var th = THEMES[settings.theme];
+    var glass = settings.style === "glass";
     if (th && th.t) {
       css.push(themeColorCss(th.t));
       css.push(baseCss(th));
-      if (th.dark) css.push(darkCss());
+      if (th.dark && !glass) css.push(darkCss());
     }
-    css.push(fontCss(fontId, urlFor));
+    if (glass) css.push(root.OWA_RESTYLE_GLASS.css(th && th.t ? th : THEMES.cloud, settings, extras, urlFor));
+    css.push(fontCss(settings.font, urlFor));
     return css.join("\n");
   }
 
   root.OWA_RESTYLE = {
     THEMES: THEMES,
     FONTS: FONTS,
-    DEFAULTS: { theme: "cloud", font: "golos" },
+    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true },
     buildCss: buildCss
   };
 })(typeof window !== "undefined" ? window : globalThis);

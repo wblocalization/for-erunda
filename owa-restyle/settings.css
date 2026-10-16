@@ -1,0 +1,50 @@
+@font-face { font-family: "Golos Text"; src: url("fonts/golos-text-cyrillic-wght-normal.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0400-045F; }
+@font-face { font-family: "Golos Text"; src: url("fonts/golos-text-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink: #1f2328; --mute: #6b7280; --line: #e5e7eb; --accent: #1f2328; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 13px/1.4 "Golos Text", "Segoe UI", sans-serif; color: var(--ink); background: #fff; }
+main { padding: 14px 16px 14px; }
+body.full { background: #f6f5fa; }
+body.full main { max-width: 680px; margin: 32px auto; background: #fff; border-radius: 18px; padding: 28px 32px; box-shadow: 0 10px 40px rgba(30,20,60,.08); }
+body.popup { width: 340px; }
+header { display: flex; justify-content: space-between; align-items: center; }
+h1 { font-size: 17px; font-weight: 650; margin: 0; }
+body.full h1 { font-size: 24px; }
+h2 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); margin: 16px 0 7px; }
+button { font: inherit; color: inherit; background: #fff; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; text-align: left; }
+button:hover { border-color: #c7cbd1; }
+button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+button.link { border: 0; background: none; color: #6a4fc0; padding: 2px 0; }
+button.link:hover { text-decoration: underline; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg button { padding: 8px 10px; }
+.seg small { display: block; color: var(--mute); font-size: 11px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+body.full .grid { grid-template-columns: repeat(4, 1fr); }
+.list { display: flex; flex-direction: column; gap: 2px; }
+.theme { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.sw { display: flex; height: 18px; border-radius: 5px; overflow: hidden; }
+.sw span { flex: 1; }
+.theme b { font-weight: 600; }
+.theme small, .font small { color: var(--mute); font-size: 11px; }
+.font { padding: 6px 10px; border-color: transparent; display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; }
+.font.on { border-color: var(--accent); }
+.walls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+body.full .walls { grid-template-columns: repeat(4, 1fr); }
+.wall { position: relative; aspect-ratio: 16 / 10; padding: 0; overflow: hidden; background-size: cover; background-position: center; display: flex; align-items: flex-end; }
+.wall span { width: 100%; padding: 3px 6px; font-size: 11px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.45)); }
+.wall.add { align-items: center; justify-content: center; border-style: dashed; color: var(--mute); text-align: center; background: #faf9fc; }
+.wall.add span { color: var(--mute); background: none; font-size: 12px; }
+.wall .del { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; line-height: 20px; text-align: center; padding: 0; display: none; }
+.wall:hover .del { display: block; }
+.sliders { display: grid; gap: 4px; margin-top: 10px; }
+.sliders label { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--mute); }
+.sliders input { width: 55%; accent-color: #6a4fc0; }
+.toggles { display: flex; flex-direction: column; gap: 6px; }
+.toggles input { accent-color: #6a4fc0; margin-right: 6px; }
+.emptyRow { display: flex; gap: 12px; align-items: center; }
+.emptyPreview { display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 11px; width: 120px; height: 90px; border: 1px solid var(--line); border-radius: 10px; background: #faf9fc center/contain no-repeat; flex: none; }
+.emptyBtns { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.emptyBtns button:not(.link) { padding: 6px 10px; }
+.hint { color: var(--mute); font-size: 11px; margin: 16px 0 0; }
+[hidden] { display: none !important; }
