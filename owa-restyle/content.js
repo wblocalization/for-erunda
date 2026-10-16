@@ -157,40 +157,46 @@
     var split = settings.heroLayout !== "wide" && H >= 150;
     var meetOn = heroOn && settings.meetings !== false && !!window.OWA_RESTYLE_MEETINGS;
     var headerView = document.getElementById("primaryHeaderView");
+
+    // Приветствие и дата — на баннере (слева), созвоны — в виджете (справа) или справа на широком баннере.
     var hero = document.querySelector(".ors-hero");
-    if (heroOn && (greetOn || meetOn || split) && headerView) {
+    if (heroOn && greetOn && headerView) {
       if (!hero) {
         hero = document.createElement("div");
         hero.className = "ors-hero";
-        ["b", "span", "span", "div"].forEach(function (tag) { hero.appendChild(document.createElement(tag)); });
+        hero.appendChild(document.createElement("b"));
+        hero.appendChild(document.createElement("span"));
         hero.children[1].className = "ors-date";
-        hero.children[2].className = "ors-sum";
-        hero.children[3].className = "ors-meet";
         headerView.appendChild(hero);
       }
       var n = inboxUnread();
-      var sub = DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()] +
-        (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + (split ? "" : " во входящих") : "");
-      hero.children[0].hidden = !greetOn;
       setText(hero.children[0], hello + " ✨");
-      setText(hero.children[1], sub);
-      setText(hero.children[2], meetOn ? meetSummary : "");
-      hero.children[2].hidden = !meetOn || !meetSummary;
-      var meetBox = hero.children[3];
-      if (meetOn) {
-        var max = split ? (H >= 250 ? 3 : H >= 210 ? 2 : 1) : (H >= 150 ? 3 : 1);
-        window.OWA_RESTYLE_MEETINGS.load().then(function (items) {
-          renderMeetings(meetBox, items, max, !split);
-          var s = summarize(items, split);
-          if (s !== meetSummary) { meetSummary = s; schedule(); }
-        });
-      } else {
-        meetBox.textContent = "";
-        meetBox.removeAttribute("data-html");
-        meetSummary = "";
+      setText(hero.children[1], DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()] +
+        (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + " во входящих" : ""));
+    } else if (hero) hero.remove();
+
+    var widget = document.querySelector(".ors-widget");
+    if (meetOn && headerView) {
+      if (!widget) {
+        widget = document.createElement("div");
+        widget.className = "ors-widget";
+        widget.appendChild(document.createElement("span"));
+        widget.appendChild(document.createElement("div"));
+        widget.children[0].className = "ors-sum";
+        widget.children[1].className = "ors-meet";
+        headerView.appendChild(widget);
       }
+      setText(widget.children[0], meetSummary);
+      widget.children[0].hidden = !meetSummary;
+      var meetBox = widget.children[1];
+      var max = split ? Math.max(1, Math.min(6, Math.floor((H - 100) / 30))) : (H >= 200 ? 3 : H >= 150 ? 2 : 1);
+      window.OWA_RESTYLE_MEETINGS.load().then(function (items) {
+        renderMeetings(meetBox, items, max, false);
+        var s = summarize(items, true);
+        if (s !== meetSummary) { meetSummary = s; schedule(); }
+      });
     } else {
-      if (hero) hero.remove();
+      if (widget) widget.remove();
       meetSummary = "";
     }
   }
@@ -324,7 +330,7 @@
     new MutationObserver(function (muts) {
       for (var i = 0; i < muts.length; i++) {
         var n = muts[i].target;
-        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet") || n.classList.contains("ors-hero") || (n.closest && n.closest(".ors-hero")) || (n.parentElement && n.parentElement.classList && n.parentElement.classList.contains("ors-hero")))) continue;
+        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet") || n.classList.contains("ors-hero") || (n.closest && n.closest(".ors-hero, .ors-widget")) || n.classList.contains("ors-widget") || (n.parentElement && n.parentElement.classList && n.parentElement.classList.contains("ors-hero")))) continue;
         schedule();
         return;
       }
