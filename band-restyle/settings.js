@@ -59,6 +59,26 @@
     });
   }
 
+  var uploadTarget = "wallpaper";
+
+  function gallery(id, key, opts) {
+    var box = $(id); box.innerHTML = "";
+    opts.forEach(function (o) {
+      var t = wallTile(o[1], o[2], cur[key] === o[0], function () { var p = {}; p[key] = o[0]; save(p); });
+      if (o[3]) { t.style.background = o[3]; t.querySelector("span").style.color = "#6b7280"; t.querySelector("span").style.background = "none"; }
+      box.appendChild(t);
+    });
+    (local.images || []).forEach(function (img) {
+      var t = wallTile(img.name || "Моя картинка", "url(" + img.data + ")", cur[key] === img.id, function () { var p = {}; p[key] = img.id; save(p); });
+      box.appendChild(t);
+    });
+    var add = wallTile("+ Загрузить", null, false, function () {
+      if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = key; $("wallFile").click(); }
+    });
+    add.classList.add("add");
+    box.appendChild(add);
+  }
+
   function render() {
     $("glassOnly").hidden = cur.style !== "glass";
     $("openFull").hidden = !popup;
@@ -84,9 +104,10 @@
           if (!confirm("Удалить эту картинку?")) return;
           saveLocal({ images: local.images.filter(function (x) { return x.id !== img.id; }) });
           if (cur.wallpaper === img.id) save({ wallpaper: "theme" });
+          if (cur.heroImage === img.id) save({ heroImage: "theme" });
         }));
     });
-    var add = wallTile("+ Загрузить свою", null, false, function () { if (popup) chrome.runtime.openOptionsPage(); else $("wallFile").click(); });
+    var add = wallTile("+ Загрузить свою", null, false, function () { if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = "wallpaper"; $("wallFile").click(); } });
     add.classList.add("add");
     walls.appendChild(add);
     $("dim").value = cur.dim;
@@ -107,13 +128,25 @@
     if (document.activeElement !== $("customColor")) $("customColor").value = cur.customColor;
     if (document.activeElement !== $("customColor2")) $("customColor2").value = cur.customColor2;
 
+    document.querySelectorAll(".toggles input").forEach(function (cb) { cb.checked = cur[cb.dataset.key] !== false; });
+    $("heroWrap").hidden = cur.hero === false;
+    $("statusWrap").hidden = cur.statuses === false;
+    $("heroHeight").value = cur.heroHeight;
+    $("heroPos").value = cur.heroPos;
+    var heroTheme = th.wallpaper ? "url(" + th.wallpaper + ")" : null;
+    gallery("heroes", "heroImage", [["theme", "По теме", heroTheme, heroTheme ? null : "linear-gradient(120deg,#ddd,#f5f5f5)"]]);
+    if (document.activeElement !== $("greetingName")) $("greetingName").value = cur.greetingName || "";
+    if (document.activeElement !== $("statusPresets")) $("statusPresets").value = cur.statusPresets || "";
+    var bs = local.bandStatus;
+    $("apiStatus").textContent = bs && !bs.ok ? "Не получилось получить данные Band: " + bs.error + ". Пришли эту строчку — поправлю." : "";
+
     $("chatOpacity").value = cur.chatOpacity;
     $("radius").value = cur.radius;
     var accentDefault = th.t ? th.t.dark : "#A3307E";
     seg("sidebarTones", "sidebarTone", [["dark", "Тёмная", th.sidebar || "#2E2566"], ["light", "Светлая", th.t ? th.t.lighter : "#F4F4F6"]]);
     seg("headerTexts", "headerText", [["white", "Белый", "#FFFFFF"], ["dark", "Тёмный", "#1F2328"], ["custom", "Свой", cur.headerTextColor]]);
     seg("accentTexts", "accentText", [["theme", "По теме", accentDefault], ["custom", "Свой", cur.accentTextColor]]);
-    seg("displayFonts", "displayFont", [["auto", "По теме"], ["on", "Декоративный (Unbounded)"], ["off", "Обычный"]]);
+    seg("displayFonts", "displayFont", [["auto", "По теме"], ["on", "Декоративный"], ["off", "Обычный"]]);
     $("headerTextRow").hidden = cur.style !== "glass";
     $("headerTextPick").hidden = cur.headerText !== "custom";
     $("accentTextPick").hidden = cur.accentText !== "custom";
@@ -154,7 +187,11 @@
     e.target.value = "";
     (function next(lastId) {
       var f = files.shift();
-      if (!f) { if (lastId) save({ wallpaper: lastId, style: "glass" }); return; }
+      if (!f) {
+        if (lastId) { var p = {}; p[uploadTarget] = lastId; if (uploadTarget === "wallpaper") p.style = "glass"; save(p); }
+        uploadTarget = "wallpaper";
+        return;
+      }
       readImage(f, function (data) {
         var id = "img" + Date.now() + Math.floor(Math.random() * 1000);
         saveLocal({ images: (local.images || []).concat([{ id: id, name: f.name.replace(/\.[^.]+$/, "").slice(0, 24), data: data }]) }, function () { next(id); });
@@ -163,20 +200,24 @@
   };
   $("openFull").onclick = function () { chrome.runtime.openOptionsPage(); };
 
-  ["dim", "blur", "chatOpacity", "radius", "customColor", "customColor2", "headerTextColor", "accentTextColor"].forEach(function (k) {
+  ["dim", "blur", "chatOpacity", "radius", "heroHeight", "heroPos", "greetingName", "statusPresets", "customColor", "customColor2", "headerTextColor", "accentTextColor"].forEach(function (k) {
     var timer = null;
     $(k).oninput = function () {
       var v = this.type === "range" ? +this.value : this.value;
       clearTimeout(timer);
-      timer = setTimeout(function () { var p = {}; p[k] = v; save(p); }, 220);
+      timer = setTimeout(function () { var p = {}; p[k] = v; save(p); }, this.tagName === "TEXTAREA" || this.type === "text" ? 600 : 220);
     };
+  });
+
+  document.querySelectorAll(".toggles input").forEach(function (cb) {
+    cb.onchange = function () { var p = {}; p[cb.dataset.key] = cb.checked; save(p); };
   });
 
   chrome.storage.sync.get(R.DEFAULTS, function (s) {
     cur = s;
-    chrome.storage.local.get({ images: [] }, function (l) { local = l; render(); });
+    chrome.storage.local.get({ images: [], bandStatus: null }, function (l) { local = l; render(); });
   });
   chrome.storage.onChanged.addListener(function (ch, area) {
-    if (area === "local") chrome.storage.local.get({ images: [] }, function (l) { local = l; render(); });
+    if (area === "local") chrome.storage.local.get({ images: [], bandStatus: null }, function (l) { local = l; render(); });
   });
 })();

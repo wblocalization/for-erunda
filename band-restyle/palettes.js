@@ -34,6 +34,14 @@
       t: { darker: "#3F3390", dark: "#5848B8", primary: "#6A5ACD", secondary: "#7D6FD6", tertiary: "#A99FE6", light: "#DCD7F7", lighter: "#EDEAFB", lighterAlt: "#F8F7FE" },
       sidebar: "#2C2466", accent2: "#A99FE6"
     },
+    halloween: {
+      name: "Хэллоуин", note: "Тыквы, луна, чёрные коты", swatch: ["#E8711C", "#1E1714"],
+      t: { darker: "#6E2F06", dark: "#B4520C", primary: "#E26A12", secondary: "#EE8A3E", tertiary: "#F4B27A", light: "#F9D9BC", lighter: "#FCEADA", lighterAlt: "#FEF6EE" },
+      sidebar: "#1E1714", accent2: "#8BD42C",
+      header: "linear-gradient(90deg, rgba(30,23,20,.82) 0%, rgba(58,36,24,.7) 50%, rgba(226,106,18,.6) 100%)",
+      gradient: "linear-gradient(120deg, #F5A623 0%, #E26A12 50%, #8A3A08 100%)",
+      wallpaper: "halloween.webp", displayFont: "rubik-wet-paint"
+    },
     custom: { name: "Свой цвет", note: "Выбери цвета сама", swatch: ["#E0457B", "#7C5BB0"], custom: true }
   };
 
@@ -48,7 +56,10 @@
   var DEFAULTS = {
     style: "glass", theme: "vice", font: "golos", wallpaper: "theme", dim: 10, blur: 22, customColor: "#E0457B", customColor2: "#7C5BB0",
     sidebarTone: "dark", chatOpacity: 84, radius: 18, headerText: "white", headerTextColor: "#FFFFFF",
-    accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto"
+    accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto",
+    hero: true, heroHeight: 170, heroImage: "theme", heroPos: 40, heroCollapsed: false, greetingName: "",
+    digest: true, statuses: true, notes: true,
+    statusPresets: "hamburger | Обед | 60\nheadphones | На созвоне | 60\nhouse | Не за компом | 30\ndart | Фокус, пишите позже | 120"
   };
 
   function rgbOf(hex) {
@@ -175,9 +186,16 @@
       out.push("html body,html input,html textarea,html button{font-family:\"Band Restyle UI\",\"Open Sans\",sans-serif}");
     }
     if (displayFont) {
-      faces("Band Restyle Display", "unbounded", ["200 900"]);
+      // true — Unbounded (переменный вес), строка — статичный шрифт из fonts/ (например, «rubik-wet-paint»).
+      var file = displayFont === true ? "unbounded" : displayFont, w = displayFont === true ? 600 : 400;
+      if (displayFont === true) faces("Band Restyle Display", "unbounded", ["200 900"]);
+      else [["cyrillic", CYRILLIC], ["latin", LATIN]].forEach(function (sub) {
+        out.push("@font-face{font-family:\"Band Restyle Display\";src:url(\"" + urlFor("fonts/" + file + "-" + sub[0] + "-400-normal.woff2") +
+          "\") format(\"woff2\");font-weight:400;font-style:normal;font-display:swap;unicode-range:" + sub[1] + "}");
+      });
       out.push("html .channel-header__top .channel-header__heading,html #channelHeaderTitle,html .channel-header__title strong,html #sidebarTeamMenuButton span" +
-        "{font-family:\"Band Restyle Display\",sans-serif!important;font-weight:600!important;letter-spacing:0}");
+        "{font-family:\"Band Restyle Display\",sans-serif!important;font-weight:" + w + "!important;letter-spacing:0}");
+      if (w === 400) out.push(".brs-hello{font-weight:400!important}");
       out.push("html #sidebarTeamMenuButton span{font-size:15px!important}");
     }
     // Код и моноширинный текст не трогаем.
@@ -238,7 +256,7 @@
     out.push("html #SidebarContainer .SidebarChannel.active>.SidebarLink,html #SidebarContainer .SidebarChannel.active .SidebarLink{background:" + (lightSide ? rgba(t.primary, .12) : "rgba(255,255,255,.16)") + "!important;" +
       "box-shadow:inset 3px 0 0 " + (lightSide ? t.primary : th.accent2) + "}");
     out.push("html #SidebarContainer .SidebarChannel.active:before{display:none!important}");
-    out.push("html .SidebarChannelGroupHeader_groupButton{letter-spacing:.06em;opacity:.75}");
+    out.push("html .SidebarChannelGroupHeader_groupButton{letter-spacing:.06em;opacity:" + (lightSide ? "1" : ".75") + "}");
     out.push("html #SidebarContainer .SidebarChannelLinkLabel{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}");
     out.push("html #SidebarContainer .SidebarChannelLinkLabel_wrapper{min-width:0;overflow:hidden}");
     out.push("html .badge,html .SidebarChannel .badge{background:" + gradient + "!important;color:#fff!important}");
@@ -263,6 +281,23 @@
     return out.join("\n");
   }
 
+  // Светлая панель: Band рисует прочитанные каналы полупрозрачным цветом текста — на светлом фоне это бледно-серый.
+  // Делаем текст насыщенным тёмным цветом темы.
+  function lightSidebarCss(th) {
+    var ink = mix(th.sidebar, "#000000", .35), soft = mix(ink, "#FFFFFF", .18);
+    return [
+      "html #SidebarContainer .SidebarLink,html #SidebarContainer .SidebarLink .icon,html #SidebarContainer .SidebarLink i," +
+        "html #SidebarContainer .SidebarChannelLinkLabel{color:" + soft + "!important;opacity:1!important}",
+      "html #SidebarContainer .SidebarChannel.unread .SidebarLink,html #SidebarContainer .SidebarChannel.unread .SidebarChannelLinkLabel," +
+        "html #SidebarContainer .SidebarChannel.active .SidebarLink,html #SidebarContainer .SidebarChannel.active .SidebarChannelLinkLabel{color:" + ink + "!important;font-weight:700}",
+      "html #SidebarContainer .SidebarChannelGroupHeader_groupButton,html #SidebarContainer .SidebarChannelGroupHeader_groupButton *{color:" + soft + "!important;opacity:.9!important}",
+      "html #SidebarContainer #sidebarTeamMenuButton,html #SidebarContainer #sidebarTeamMenuButton *,html #SidebarContainer .sidebarHeaderContainer button{color:" + ink + "!important}",
+      "html #SidebarContainer #SidebarChannelNavigatorButton{color:" + soft + "!important;background:" + rgba(th.t.primary, .08) + "!important}",
+      "html #SidebarContainer #SidebarChannelNavigatorButton *{color:" + soft + "!important}",
+      "html #SidebarContainer .SidebarChannelNavigator_shortcutText{opacity:.7}"
+    ].join("\n");
+  }
+
   function buildCss(s, urlFor, extras) {
     extras = extras || {};
     var th = themeFor(s);
@@ -270,11 +305,13 @@
     if (th && th.t) {
       css.push(varsCss(th, s));
       if (s.style === "glass") css.push(glassCss(th, s, extras));
+      if (s.sidebarTone === "light") css.push(lightSidebarCss(th));
     }
-    var display = s.displayFont === "on" || (s.displayFont !== "off" && !!(th && th.displayFont && s.style === "glass"));
+    var display = s.displayFont === "on" ? (th && th.displayFont) || true
+      : s.displayFont !== "off" && th && th.displayFont && s.style === "glass" ? th.displayFont : false;
     css.push(fontCss(s.font, display, urlFor));
     return css.join("\n");
   }
 
-  root.BAND_RESTYLE = { THEMES: THEMES, FONTS: FONTS, DEFAULTS: DEFAULTS, buildCss: buildCss, themeFor: themeFor };
+  root.BAND_RESTYLE = { THEMES: THEMES, FONTS: FONTS, DEFAULTS: DEFAULTS, buildCss: buildCss, themeFor: themeFor, mix: mix, rgba: rgba };
 })(typeof window !== "undefined" ? window : globalThis);

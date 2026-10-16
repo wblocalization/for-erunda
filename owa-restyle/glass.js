@@ -319,12 +319,16 @@
     // Шрифт для заголовков у тем с «характером».
     if (th.displayFont) {
       var fam = "OWA Restyle Display";
+      // true — Unbounded (переменный вес), строка — статичный шрифт из fonts/ (например, «rubik-wet-paint» у Хэллоуина).
+      var df = th.displayFont === true ? { file: "unbounded", suffix: "wght-normal", weight: "200 900", use: 600 }
+        : { file: th.displayFont, suffix: "400-normal", weight: "400", use: 400 };
       ["cyrillic", "latin"].forEach(function (sub) {
-        out.push("@font-face{font-family:\"" + fam + "\";src:url(\"" + urlFor("fonts/unbounded-" + sub + "-wght-normal.woff2") +
-          "\") format(\"woff2\");font-weight:200 900;font-display:swap;unicode-range:" + (sub === "cyrillic" ? "U+0400-045F,U+0490-0491,U+2116" : "U+0000-00FF,U+2000-206F") + "}");
+        out.push("@font-face{font-family:\"" + fam + "\";src:url(\"" + urlFor("fonts/" + df.file + "-" + sub + "-" + df.suffix + ".woff2") +
+          "\") format(\"woff2\");font-weight:" + df.weight + ";font-display:swap;unicode-range:" + (sub === "cyrillic" ? "U+0400-045F,U+0490-0491,U+2116" : "U+0000-00FF,U+2000-206F") + "}");
       });
       out.push(":root{--ors-display:\"" + fam + "\", sans-serif}");
-      out.push("html .folderHeaderLabel.folderHeaderLabel,html #O365_NavHeader .o365cs-nav-brandingText{font-family:var(--ors-display)!important;font-weight:600!important;letter-spacing:0}");
+      out.push("html .folderHeaderLabel.folderHeaderLabel,html #O365_NavHeader .o365cs-nav-brandingText{font-family:var(--ors-display)!important;font-weight:" + df.use + "!important;letter-spacing:0}");
+      if (df.use === 400) out.push("html .ors-hero>b{font-weight:400!important;letter-spacing:.01em}");
       out.push("html .folderHeaderLabel.folderHeaderLabel{background:var(--ors-gradient);-webkit-background-clip:text;background-clip:text;color:transparent!important}");
     }
 

@@ -1,21 +1,55 @@
 {
   "manifest_version": 3,
   "name": "Band Restyle",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Новый вид для Band (band.wb.ru): обои, стеклянные панели, темы и шрифты.",
-  "permissions": ["storage", "unlimitedStorage"],
-  "host_permissions": ["https://band.wb.ru/*"],
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://band.wb.ru/*"
+  ],
   "content_scripts": [
-    { "matches": ["https://band.wb.ru/*"], "js": ["palettes.js", "content.js"], "run_at": "document_start" }
+    {
+      "matches": [
+        "https://band.wb.ru/*"
+      ],
+      "js": [
+        "palettes.js",
+        "content.js",
+        "features.js"
+      ],
+      "run_at": "document_start"
+    }
   ],
   "web_accessible_resources": [
-    { "resources": ["fonts/*.woff2", "vice-sunset.webp"], "matches": ["https://band.wb.ru/*"] }
+    {
+      "resources": [
+        "fonts/*.woff2",
+        "vice-sunset.webp",
+        "halloween.webp"
+      ],
+      "matches": [
+        "https://band.wb.ru/*"
+      ]
+    }
   ],
   "options_page": "settings.html",
   "action": {
     "default_title": "Band Restyle",
     "default_popup": "settings.html?popup=1",
-    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
-  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }

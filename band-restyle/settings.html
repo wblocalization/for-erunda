@@ -27,6 +27,34 @@
       </div>
     </section>
 
+    <h2>Баннер и полезное</h2>
+    <div class="toggles">
+      <label><input type="checkbox" data-key="hero"> Баннер над чатом: приветствие, дата</label>
+      <label><input type="checkbox" data-key="digest"> Сводка: упоминания, треды, каналы с упоминаниями</label>
+      <label><input type="checkbox" data-key="statuses"> Кнопки быстрых статусов</label>
+      <label><input type="checkbox" data-key="notes"> Личные заметки к каналам и людям</label>
+    </div>
+    <p id="apiStatus" class="sub"></p>
+    <div id="heroWrap">
+      <div class="sliders">
+        <label>Высота баннера <input id="heroHeight" type="range" min="110" max="260" step="10"></label>
+      </div>
+      <p class="sub">Картинка баннера</p>
+      <div id="heroes" class="walls"></div>
+      <div class="sliders" id="heroPosWrap">
+        <label>Сдвиг картинки ↕ <input id="heroPos" type="range" min="0" max="100" step="1"></label>
+      </div>
+      <label class="field">Как обращаться в приветствии
+        <input id="greetingName" type="text" placeholder="Пусто — имя из профиля Band" maxlength="40">
+      </label>
+    </div>
+    <div id="statusWrap">
+      <label class="field">Кнопки статусов — по одной в строке: <code>эмодзи | текст | минуты</code>
+        <textarea id="statusPresets" rows="5"></textarea>
+      </label>
+      <p class="sub">Эмодзи: hamburger 🍔 · coffee ☕ · pizza 🍕 · headphones 🎧 · calendar 📅 · house 🏠 · car 🚗 · dart 🎯 · computer 💻 · rocket 🚀 · palm_tree 🌴 · sleeping 😴 · thermometer_face 🤒. Минуты пусто — до конца дня.</p>
+    </div>
+
     <h2>Боковая панель</h2>
     <div id="sidebarTones" class="seg3"></div>
 

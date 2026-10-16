@@ -67,6 +67,20 @@
       wallpaper: "vice-sunset.webp",
       displayFont: true
     },
+    halloween: {
+      name: "Хэллоуин",
+      note: "Тыквы, луна, чёрные коты",
+      swatch: ["#E8711C", "#1E1714"],
+      t: {
+        darker: "#6E2F06", dark: "#B4520C", darkAlt: "#B4520C", primary: "#E26A12",
+        secondary: "#EE8A3E", tertiary: "#F4B27A", light: "#F9D9BC", lighter: "#FCEADA", lighterAlt: "#FEF6EE"
+      },
+      header: "linear-gradient(90deg, #1E1714 0%, #3A2418 45%, #B4520C 80%, #E8711C 100%)",
+      gradient: "linear-gradient(120deg, #F5A623 0%, #E26A12 50%, #8A3A08 100%)",
+      pane: "#FDF6EF",
+      wallpaper: "halloween.webp",
+      displayFont: "rubik-wet-paint"
+    },
     custom: {
       name: "Свой цвет",
       note: "Выбери цвета сама",
