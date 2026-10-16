@@ -79,6 +79,22 @@
     box.appendChild(add);
   }
 
+  // Ряд кнопок-переключателей с кружком цвета.
+  function seg(id, key, opts) {
+    var box = $(id); box.innerHTML = "";
+    opts.forEach(function (o) {
+      var b = btn(cur[key] === o[0] ? "on" : "", "<i></i><span></span>");
+      b.querySelector("i").style.background = o[2];
+      b.querySelector("span").textContent = o[1];
+      b.onclick = function () {
+        var p = {}; p[key] = o[0];
+        if (key === "accentText" && o[0] === "custom" && !cur.accentTextColor) p.accentTextColor = o[2];
+        save(p);
+      };
+      box.appendChild(b);
+    });
+  }
+
   function render() {
     var glass = cur.style === "glass";
     $("glassOnly").hidden = !glass;
@@ -156,6 +172,16 @@
     $("customColors").hidden = cur.theme !== "custom";
     if (document.activeElement !== $("customColor")) $("customColor").value = cur.customColor || "#E0457B";
     if (document.activeElement !== $("customColor2")) $("customColor2").value = cur.customColor2 || "#7C5BB0";
+
+    var th2 = R.themeFor(cur) || {};
+    var accentDefault = th2.t ? th2.t.primary : "#C23F8C";
+    seg("heroTexts", "heroText", [["white", "Белый", "#FFFFFF"], ["dark", "Тёмный", "#1F2328"], ["custom", "Свой", cur.heroTextColor || "#FFFFFF"]]);
+    seg("accentTexts", "accentText", [["theme", "По теме", accentDefault], ["custom", "Свой", cur.accentTextColor || accentDefault]]);
+    $("heroTextRow").hidden = cur.style !== "glass";
+    $("heroTextPick").hidden = cur.heroText !== "custom";
+    $("accentTextPick").hidden = cur.accentText !== "custom";
+    if (document.activeElement !== $("heroTextColor")) $("heroTextColor").value = cur.heroTextColor || "#FFFFFF";
+    if (document.activeElement !== $("accentTextColor")) $("accentTextColor").value = cur.accentTextColor || accentDefault;
 
     var fonts = $("fonts"); fonts.innerHTML = "";
     Object.keys(R.FONTS).forEach(function (id) {
@@ -249,7 +275,7 @@
     cb.onchange = function () { var p = {}; p[cb.dataset.key] = cb.checked; save(p); };
   });
 
-  ["customColor", "customColor2"].forEach(function (k) {
+  ["customColor", "customColor2", "heroTextColor", "accentTextColor"].forEach(function (k) {
     var timer = null;
     $(k).oninput = function () {
       var v = this.value;

@@ -57,8 +57,17 @@
     return "rgba(" + (n >> 16 & 255) + "," + (n >> 8 & 255) + "," + (n & 255) + "," + a + ")";
   }
 
+  function lum(hex) {
+    var n = parseInt(String(hex || "#ffffff").replace("#", ""), 16);
+    var c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(function (v) { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+    return .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+  }
+
   function css(th, s, extras, urlFor) {
     var t = th.t;
+    // Цвет текста в шапке: белый (по умолчанию), тёмный или свой. От его яркости зависят подложки под текстом.
+    var ht = s.heroText === "dark" ? "#1F2328" : s.heroText === "custom" ? (s.heroTextColor || "#FFFFFF") : "#FFFFFF";
+    var lightText = lum(ht) > .4;
     var dim = Math.max(0, Math.min(70, +s.dim || 0)) / 100;
     var blur = Math.max(0, Math.min(40, +s.blur || 0));
     var wall = extras.wallpaper
@@ -207,7 +216,10 @@
       out.push("html ._n_c{height:" + H + "px!important}");
       var split = s.heroLayout !== "wide" && H >= 150;
       var card = "border-radius:22px;z-index:-1;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px rgba(20,10,40,.15)";
-      var shade = "linear-gradient(180deg,rgba(0,0,0,.28) 0,rgba(0,0,0,0) 70px),linear-gradient(0deg,rgba(0,0,0,.36) 0,rgba(0,0,0,0) 65%),";
+      var shade = lightText
+        ? "linear-gradient(180deg,rgba(0,0,0,.28) 0,rgba(0,0,0,0) 70px),linear-gradient(0deg,rgba(0,0,0,.36) 0,rgba(0,0,0,0) 65%),"
+        : "linear-gradient(180deg,rgba(255,255,255,.4) 0,rgba(255,255,255,0) 70px),linear-gradient(0deg,rgba(255,255,255,.55) 0,rgba(255,255,255,0) 65%),";
+      if (!lightText && !extras.heroImage && !extras.wallpaper) heroBg = "linear-gradient(90deg," + t.lighter + "," + t.light + ")";
       out.push(":root{--ors-w:min(520px,41vw)}");
       out.push("html #primaryHeaderView::before{content:\"\";position:absolute;" +
         (split ? "inset:8px calc(var(--ors-w) + 16px) 0 8px;" : "inset:8px 8px 0 8px;") + card + ";background:" + shade + heroBg + "}");
@@ -237,7 +249,10 @@
         // Виджет справа: своя картинка или градиент темы, внутри — кнопки OWA и созвоны.
         var widgetBg = extras.widgetImage
           ? "linear-gradient(0deg,rgba(0,0,0,.55) 0,rgba(0,0,0,.18) 60%,rgba(0,0,0,.3) 100%),url(\"" + extras.widgetImage + "\") center " + (+s.widgetPos || 50) + "%/cover no-repeat"
-          : "linear-gradient(135deg," + rgba(t.darker, .86) + "," + rgba(t.primary, .74) + ")";
+          : lightText ? "linear-gradient(135deg," + rgba(t.darker, .86) + "," + rgba(t.primary, .74) + ")"
+          : "linear-gradient(135deg," + rgba(t.lighterAlt, .82) + "," + rgba(t.light, .72) + ")";
+        if (extras.widgetImage && !lightText) widgetBg = widgetBg.replace("linear-gradient(0deg,rgba(0,0,0,.55) 0,rgba(0,0,0,.18) 60%,rgba(0,0,0,.3) 100%)",
+          "linear-gradient(0deg,rgba(255,255,255,.7) 0,rgba(255,255,255,.35) 60%,rgba(255,255,255,.5) 100%)");
         out.push("html #primaryHeaderView::after{content:\"\";position:absolute;top:8px;right:8px;bottom:0;width:var(--ors-w);" + card + ";background:" + widgetBg + ";" + bf + "}");
         // Приветствие — на баннере под «Почта».
         out.push("html .ors-hero{left:36px;right:calc(var(--ors-w) + 44px);bottom:22px}");
@@ -311,6 +326,19 @@
       out.push(":root{--ors-display:\"" + fam + "\", sans-serif}");
       out.push("html .folderHeaderLabel.folderHeaderLabel,html #O365_NavHeader .o365cs-nav-brandingText{font-family:var(--ors-display)!important;font-weight:600!important;letter-spacing:0}");
       out.push("html .folderHeaderLabel.folderHeaderLabel{background:var(--ors-gradient);-webkit-background-clip:text;background-clip:text;color:transparent!important}");
+    }
+
+    var hshadow = lightText ? "0 2px 12px rgba(0,0,0,.35)" : "0 1px 10px rgba(255,255,255,.6)";
+    out.push("html .ors-hero,html .ors-widget,html .ors-greet,html #O365_NavHeader .o365cs-nav-brandingText,html #O365_NavHeader .o365cs-topnavText," +
+      "html #O365_NavHeader button.o365cs-nav-button .owaimg{color:" + ht + "!important;text-shadow:" + hshadow + "!important}");
+    out.push("html .ors-chip:not(.now){color:" + ht + "!important}");
+    if (!lightText) {
+      out.push("html .ors-chip:not(.now){background:rgba(255,255,255,.55);box-shadow:inset 0 0 0 1px rgba(255,255,255,.7);text-shadow:none!important}");
+      out.push("html .ors-chip:not(.now):hover{background:rgba(255,255,255,.75)}");
+      out.push("html .ors-chip:not(.now) em{background:" + rgba(t.primary, .14) + ";color:" + t.dark + "}");
+      out.push("html .ors-chip.now{color:#fff!important}");
+      out.push("html #O365_NavHeader button.o365cs-nav-button{background:rgba(255,255,255,.5)!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.7)}");
+      out.push("html #O365_NavHeader button.o365cs-nav-button:hover{background:rgba(255,255,255,.75)!important}");
     }
 
     return out.join("\n");

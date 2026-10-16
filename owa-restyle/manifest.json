@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OWA Restyle",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Новый внешний вид для Outlook Web App (mail.rwb.ru): темы и шрифты интерфейса.",
   "permissions": [
     "storage",

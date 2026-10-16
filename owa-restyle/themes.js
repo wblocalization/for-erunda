@@ -299,6 +299,21 @@
     return THEMES[settings.theme];
   }
 
+  // Свой цвет для заголовков и акцентного текста: «Входящие», выбранная папка, счётчики, темы непрочитанных, ссылки.
+  function accentTextCss(c) {
+    var dark = mix(c, "#000000", .18);
+    var cls = ["tp", "ts", "td", "tda", "tdr"];
+    var longs = ["themePrimary", "themeSecondary", "themeDark", "themeDarkAlt", "themeDarker"];
+    var sel = [];
+    cls.forEach(function (k) { sel.push(".ms-fcl-" + k, ".ms-fcl-" + k + "-h:hover", ".ms-fcl-" + k + "-b:before"); });
+    longs.forEach(function (k) { sel.push(".ms-font-color-" + k, ".ms-fontColor-" + k, ".ms-font-color-" + k + "-hover:hover", ".ms-font-color-" + k + "-before:before"); });
+    return [
+      sel.map(function (x) { return "html body " + x; }).join(",") + "{color:" + c + "}",
+      "html body ._n_E4,html body ._n_I4.ms-bgc-tl ._n_C4{color:" + dark + "!important}",
+      "html body .folderHeaderLabel.folderHeaderLabel{color:" + c + "!important;background:none!important;-webkit-text-fill-color:" + c + "}"
+    ].join("\n");
+  }
+
   function buildCss(settings, urlFor, extras) {
     extras = extras || {};
     var css = [];
@@ -310,6 +325,7 @@
       if (th.dark && !glass) css.push(darkCss());
     }
     if (glass) css.push(root.OWA_RESTYLE_GLASS.css(th && th.t ? th : THEMES.cloud, settings, extras, urlFor));
+    if (settings.accentText === "custom" && settings.accentTextColor) css.push(accentTextCss(settings.accentTextColor));
     css.push(fontCss(settings.font, urlFor));
     return css.join("\n");
   }
@@ -317,7 +333,7 @@
   root.OWA_RESTYLE = {
     THEMES: THEMES,
     FONTS: FONTS,
-    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 220, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50, greetingName: "", meetings: true, heroLayout: "split", widgetImage: "none", widgetPos: 50, customColor: "#E0457B", customColor2: "#7C5BB0" },
+    DEFAULTS: { style: "glass", theme: "cloud", font: "golos", wallpaper: "theme", dim: 15, blur: 24, greeting: true, avatars: true, folderIcons: true, heroHeight: 220, heroImage: "wallpaper", heroPos: 30, readingImage: "none", readingPos: 50, greetingName: "", meetings: true, heroLayout: "split", widgetImage: "none", widgetPos: 50, customColor: "#E0457B", customColor2: "#7C5BB0", heroText: "white", heroTextColor: "#FFFFFF", accentText: "theme", accentTextColor: "#C23F8C" },
     buildCss: buildCss,
     themeFor: themeFor
   };
