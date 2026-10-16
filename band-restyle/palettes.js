@@ -266,8 +266,8 @@
     out.push("html .app-bar,html .team-sidebar,html #SidebarContainer,html #channel_view,html #sidebar-right,html .channel-header{border-color:transparent!important;box-shadow:none}");
 
     // Верхняя панель.
-    out.push("html #global-header{background:transparent!important;position:relative;isolation:isolate;border:0!important;box-shadow:0 1px 0 rgba(255,255,255,.18)}");
-    out.push("html #global-header::before{content:\"\";position:absolute;inset:0;background:" + header + ";" + bf + ";z-index:-1;pointer-events:none}");
+    out.push("html #global-header{background:" + header + "!important;position:relative;isolation:isolate;border:0!important;box-shadow:0 1px 0 rgba(255,255,255,.18)}");
+    out.push("html #global-header::before{content:\"\";position:absolute;inset:0;background:transparent;" + bf + ";z-index:-1;pointer-events:none}");
     out.push("html #global-header,html #global-header i,html #global-header button,html #global-header span:not(.emoticon){color:" + ht + "!important}");
     out.push("html #searchFormContainer{background:rgba(255,255,255," + (lightText ? ".18" : ".6") + ")!important;border:1px solid rgba(255,255,255," + (lightText ? ".3" : ".8") + ")!important;" +
       "border-radius:12px!important;color:" + ht + "!important}");
@@ -276,13 +276,13 @@
     out.push("html #userAccountMenuButton img.Avatar{box-shadow:0 0 0 2px rgba(255,255,255,.9)}");
 
     // Колонка команд, список каналов, центр, правая панель — стеклянные карточки с отступами.
-    out.push("html .team-sidebar{background:transparent!important;position:relative;isolation:isolate;margin:8px 0 8px 8px;border-radius:" + R2 + "px;height:auto!important;box-sizing:border-box}");
-    out.push("html .team-sidebar::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:" + rgba(mix(sb, "#000000", .2), .42) + ";" + bf + ";z-index:-1;pointer-events:none}");
-    out.push("html #SidebarContainer::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:" + rgba(sb, lightSide ? .72 : .62) + ";" + bf + ";z-index:-1;pointer-events:none}");
-    out.push("html #SidebarContainer{background:transparent!important;position:relative;isolation:isolate;margin:8px 4px 8px 6px;border-radius:" + R + "px;overflow:hidden;height:auto!important;" +
+    out.push("html .team-sidebar{background:" + rgba(mix(sb, "#000000", .2), .42) + "!important;position:relative;isolation:isolate;margin:8px 0 8px 8px;border-radius:" + R2 + "px;height:auto!important;box-sizing:border-box}");
+    out.push("html .team-sidebar::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:transparent;" + bf + ";z-index:-1;pointer-events:none}");
+    out.push("html #SidebarContainer::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:transparent;" + bf + ";z-index:-1;pointer-events:none}");
+    out.push("html #SidebarContainer{background:" + rgba(sb, lightSide ? .72 : .62) + "!important;position:relative;isolation:isolate;margin:8px 4px 8px 6px;border-radius:" + R + "px;overflow:hidden;height:auto!important;" +
       "box-shadow:inset 0 0 0 1px rgba(255,255,255,.14),0 10px 30px rgba(20,10,40,.18)!important}");
-    out.push("html #channel_view::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:rgba(255,255,255," + chat + ");" + bf + ";z-index:-1;pointer-events:none}");
-    out.push("html #channel_view{background:transparent!important;position:relative;isolation:isolate;margin:8px 8px 8px 4px;border-radius:" + R + "px;overflow:visible!important;" +
+    out.push("html #channel_view::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:transparent;" + bf + ";z-index:-1;pointer-events:none}");
+    out.push("html #channel_view{background:rgba(255,255,255," + chat + ")!important;position:relative;isolation:isolate;margin:8px 8px 8px 4px;border-radius:" + R + "px;overflow:visible!important;" +
       "box-shadow:inset 0 0 0 1px rgba(255,255,255,.6),0 10px 30px rgba(20,10,40,.14)!important}");
     out.push("html #sidebar-right{background:rgba(255,255,255,.97)!important;border-radius:" + R + "px;margin:8px 8px 8px 0;overflow:visible!important}");
     out.push("html .app-bar{border-left:0!important}");
