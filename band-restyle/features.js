@@ -322,25 +322,80 @@
   }
 
   // ---------- Позиционирование над окном чата ----------
+  // Правая панель Band (если открыта обычным образом и стоит поверх или рядом) — баннер и заметка не должны под неё заходить.
+  function rhsLeft() {
+    if (document.documentElement.classList.contains("brs-readers")) return Infinity;
+    var rhs = document.getElementById("sidebar-right");
+    if (!rhs || !rhs.offsetWidth) return Infinity;
+    var r = rhs.getBoundingClientRect();
+    return r.width > 40 ? r.left : Infinity;
+  }
+
   function place() {
     var cv = document.getElementById("channel_view");
     var H = Math.max(110, Math.min(260, +settings.heroHeight || 170));
     var mini = settings.heroCollapsed;
     document.documentElement.style.setProperty("--brs-hero-h", (mini ? 44 : H) + "px");
+    var limit = rhsLeft();
     if (hero && cv) {
       var r = cv.getBoundingClientRect();
+      var right = Math.min(r.right, limit - 6);
       hero.style.left = (r.left + 10) + "px";
       hero.style.top = (r.top + 10) + "px";
-      hero.style.width = Math.max(0, r.width - 20) + "px";
+      hero.style.width = Math.max(0, right - r.left - 20) + "px";
       hero.style.height = (mini ? 40 : H) + "px";
     }
     var hdr = document.getElementById("channel-header");
     if (note && hdr) {
       var h = hdr.getBoundingClientRect(), c = cv ? cv.getBoundingClientRect() : h;
       note.style.top = (h.bottom + 10) + "px";
-      note.style.right = Math.max(8, window.innerWidth - c.right + 18) + "px";
+      note.style.right = Math.max(8, window.innerWidth - Math.min(c.right, limit - 6) + 18) + "px";
     }
   }
+
+  // ---------- «Сообщение прочитали» — маленьким окошком вместо правой панели ----------
+  var lastReadClick = null;
+
+  function readersOpen() {
+    var rhs = document.getElementById("sidebar-right");
+    if (!rhs || !rhs.offsetParent && getComputedStyle(rhs).position !== "fixed") return false;
+    var head = rhs.querySelector(".sidebar--right__title, .sidebar--right__header, h2, [class*=\"title\"]");
+    var text = (head ? head.textContent : rhs.textContent.slice(0, 200)) || "";
+    return /Сообщение прочитали|прочитал|Read by/i.test(text);
+  }
+
+  function closeRhs() {
+    var rhs = document.getElementById("sidebar-right");
+    if (!rhs) return;
+    var btn = rhs.querySelector("button[aria-label*=\"Закрыть\"], button[aria-label*=\"Close\"], .sidebar--right__close, button .icon-close");
+    if (btn && btn.tagName !== "BUTTON") btn = btn.closest("button");
+    if (btn) btn.click();
+  }
+
+  function updateReaders() {
+    var on = settings.readersPopup !== false && readersOpen();
+    var root = document.documentElement;
+    root.classList.toggle("brs-readers", on);
+    if (!on) return;
+    var W = 340, x = lastReadClick ? lastReadClick.x : window.innerWidth - 40, y = lastReadClick ? lastReadClick.y : 120;
+    var left = Math.max(10, Math.min(window.innerWidth - W - 10, x - W - 12));
+    var maxH = Math.min(440, window.innerHeight - 40);
+    var top = Math.max(20, Math.min(window.innerHeight - maxH - 20, y - 40));
+    root.style.setProperty("--brs-pop-left", left + "px");
+    root.style.setProperty("--brs-pop-top", top + "px");
+    root.style.setProperty("--brs-pop-h", maxH + "px");
+  }
+
+  document.addEventListener("click", function (e) {
+    var mark = e.target.closest && e.target.closest(".wb-post-read-status");
+    if (mark) { lastReadClick = { x: e.clientX, y: e.clientY }; return; }
+    if (!document.documentElement.classList.contains("brs-readers")) return;
+    var rhs = document.getElementById("sidebar-right");
+    if (rhs && !rhs.contains(e.target)) closeRhs();
+  }, true);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && document.documentElement.classList.contains("brs-readers")) closeRhs();
+  }, true);
 
   // ---------- Запуск ----------
   function load() {
@@ -417,6 +472,14 @@
       ".brs-note-close{border:0;background:none;cursor:pointer;color:" + nHead + ";font-size:13px}",
       ".brs-note textarea{width:100%;height:130px;box-sizing:border-box;resize:vertical;border:0;border-radius:8px;padding:8px;background:" + nArea + ";font-family:inherit;font-size:13px;line-height:1.45;color:" + nInk + ";outline:none}",
       ".brs-note small{display:block;margin-top:6px;color:" + nHead + ";opacity:.75;font-size:11px}",
+      // «Сообщение прочитали» — окошком возле галочек; чат не сужается.
+      "html.brs-readers #sidebar-right{position:fixed!important;left:var(--brs-pop-left)!important;top:var(--brs-pop-top)!important;right:auto!important;bottom:auto!important;" +
+        "width:340px!important;min-width:0!important;max-width:340px!important;height:var(--brs-pop-h)!important;max-height:var(--brs-pop-h)!important;margin:0!important;" +
+        "z-index:1500!important;border-radius:16px!important;overflow:hidden!important;background:var(--center-channel-bg)!important;" +
+        "box-shadow:0 18px 50px rgba(20,10,40,.28),0 0 0 1px " + rgba(t.primary, .18) + "!important;animation:brsPop .14s ease-out}",
+      "@keyframes brsPop{from{opacity:0;transform:translateY(6px) scale(.98)}}",
+      "html.brs-readers #sidebar-right button[aria-label*=\"Развернуть\"],html.brs-readers #sidebar-right button[aria-label*=\"Expand\"],html.brs-readers #sidebar-right .sidebar--right__expand{display:none!important}",
+      "html.brs-readers .inner-wrap,html.brs-readers .inner-wrap.move--left{margin-right:0!important}",
       // Всплывашка.
       ".brs-toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:3000;padding:10px 16px;border-radius:12px;background:" + mix(t.darker, "#000000", .3) +
         ";color:#fff;font:600 13px \"Band Restyle UI\",\"Open Sans\",sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:opacity .4s,transform .4s}",
@@ -435,6 +498,7 @@
       if (!featStyle.isConnected) document.head.appendChild(featStyle);
       renderHero();
       renderNote();
+      updateReaders();
       place();
     });
   }
@@ -457,6 +521,16 @@
       }
     }).observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", tick);
+    // Панели Band открываются и закрываются по клику — пересчитываем раскладку сразу и чуть позже (после анимаций).
+    document.addEventListener("click", function () { [30, 250, 700].forEach(function (ms) { setTimeout(tick, ms); }); }, true);
+    // Окно чата меняет ширину (открылась правая панель, перетащили границу) — двигаем баннер и заметку.
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(function () { tick(); }), watched = null;
+      setInterval(function () {
+        var cv = document.getElementById("channel_view");
+        if (cv && cv !== watched) { if (watched) ro.unobserve(watched); ro.observe(cv); watched = cv; }
+      }, 1000);
+    }
     setInterval(function () { digest.at = 0; tick(); }, 2 * 60 * 1000);
   }
 

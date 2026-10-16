@@ -89,7 +89,7 @@
     sidebarTone: "dark", chatOpacity: 90, radius: 18, headerText: "white", headerTextColor: "#FFFFFF",
     accentText: "theme", accentTextColor: "#C23F8C", displayFont: "auto",
     hero: true, heroHeight: 170, heroImage: "theme", heroPos: 40, heroCollapsed: false, greetingName: "",
-    digest: true, statuses: true, notes: true, readMarks: true, heroText: "white", heroTextColor: "#FFFFFF", noteStyle: "theme",
+    digest: true, statuses: true, notes: true, readMarks: true, readersPopup: true, heroText: "white", heroTextColor: "#FFFFFF", noteStyle: "theme",
     statusPresets: "hamburger | Обед | 60\nheadphones | На созвоне | 60\nhouse | Не за компом | 30\ndart | Фокус, пишите позже | 120"
   };
 
