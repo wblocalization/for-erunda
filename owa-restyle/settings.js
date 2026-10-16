@@ -63,6 +63,8 @@
     var glass = cur.style === "glass";
     $("glassOnly").hidden = !glass;
     $("glassOnly2").hidden = !glass;
+    $("glassOnly3").hidden = !glass;
+    $("heroWrap").hidden = (+cur.heroHeight || 50) <= 50;
     $("openFull").hidden = !popup;
 
     var st = $("styles"); st.innerHTML = "";
@@ -86,13 +88,52 @@
           if (!confirm("Удалить эту картинку?")) return;
           saveLocal({ images: local.images.filter(function (x) { return x.id !== img.id; }) });
           if (cur.wallpaper === img.id) save({ wallpaper: "theme" });
+          if (cur.heroImage === img.id) save({ heroImage: "wallpaper" });
+          if (cur.readingImage === img.id) save({ readingImage: "none" });
         }));
     });
     var add = wallTile("+ Загрузить свою", null, false, function () {
-      if (popup) chrome.runtime.openOptionsPage(); else $("wallFile").click();
+      if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = "wallpaper"; $("wallFile").click(); }
     });
     add.classList.add("add");
     walls.appendChild(add);
+
+    var heroes = $("heroes"); heroes.innerHTML = "";
+    heroes.appendChild(wallTile("Как фон", null, cur.heroImage === "wallpaper", function () { save({ heroImage: "wallpaper" }); }));
+    heroes.firstChild.style.background = "repeating-linear-gradient(45deg,#f1eff6 0 8px,#fafafa 8px 16px)";
+    heroes.firstChild.querySelector("span").style.color = "#6b7280";
+    heroes.firstChild.querySelector("span").style.background = "none";
+    (local.images || []).forEach(function (img) {
+      var tile = wallTile(img.name || "Моя картинка", "url(" + img.data + ")", cur.heroImage === img.id, function () { save({ heroImage: img.id }); });
+      tile.style.backgroundPosition = "center " + cur.heroPos + "%";
+      heroes.appendChild(tile);
+    });
+    var addHero = wallTile("+ Загрузить", null, false, function () {
+      if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = "heroImage"; $("wallFile").click(); }
+    });
+    addHero.classList.add("add");
+    heroes.appendChild(addHero);
+    var readings = $("readings"); readings.innerHTML = "";
+    var none = wallTile("Без картинки", null, cur.readingImage === "none" || !cur.readingImage, function () { save({ readingImage: "none" }); });
+    none.style.background = "repeating-linear-gradient(45deg,#f1eff6 0 8px,#fafafa 8px 16px)";
+    none.querySelector("span").style.color = "#6b7280";
+    none.querySelector("span").style.background = "none";
+    readings.appendChild(none);
+    (local.images || []).forEach(function (img) {
+      var tile = wallTile(img.name || "Моя картинка", "url(" + img.data + ")", cur.readingImage === img.id, function () { save({ readingImage: img.id }); });
+      tile.style.backgroundPosition = "center " + cur.readingPos + "%";
+      readings.appendChild(tile);
+    });
+    var addReading = wallTile("+ Загрузить", null, false, function () {
+      if (popup) chrome.runtime.openOptionsPage(); else { uploadTarget = "readingImage"; $("wallFile").click(); }
+    });
+    addReading.classList.add("add");
+    readings.appendChild(addReading);
+    $("readingPosWrap").hidden = !cur.readingImage || cur.readingImage === "none";
+    $("readingPos").value = cur.readingPos;
+
+    $("heroHeight").value = cur.heroHeight;
+    $("heroPos").value = cur.heroPos;
 
     $("dim").value = cur.dim;
     $("blur").value = cur.blur;
@@ -153,12 +194,17 @@
     reader.readAsDataURL(file);
   }
 
+  var uploadTarget = "wallpaper";
   $("wallFile").onchange = function (e) {
     var files = Array.prototype.slice.call(e.target.files);
     e.target.value = "";
     (function next(lastId) {
       var f = files.shift();
-      if (!f) { if (lastId) save({ wallpaper: lastId, style: "glass" }); return; }
+      if (!f) {
+        if (lastId) { var p = { style: "glass" }; p[uploadTarget] = lastId; save(p); }
+        uploadTarget = "wallpaper";
+        return;
+      }
       readImage(f, 2560, "image/jpeg", 0.88, function (data) {
         var id = "img" + Date.now() + Math.floor(Math.random() * 1000);
         var name = f.name.replace(/\.[^.]+$/, "").slice(0, 24);
@@ -178,7 +224,7 @@
   $("emptyReset").onclick = function () { saveLocal({ emptyImage: null }); };
   $("openFull").onclick = function () { chrome.runtime.openOptionsPage(); };
 
-  ["dim", "blur"].forEach(function (k) {
+  ["dim", "blur", "heroHeight", "heroPos", "readingPos"].forEach(function (k) {
     var timer = null;
     $(k).oninput = function () {
       var v = +this.value;

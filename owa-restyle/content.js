@@ -27,7 +27,12 @@
       chrome.storage.local.get({ images: [], emptyImage: null }, function (local) {
         resolveWallpaper(s, local, function (wall) {
           settings = s;
-          style.textContent = R.buildCss(s, urlFor, { wallpaper: wall, emptyImage: local.emptyImage });
+          var hero = s.heroImage && s.heroImage !== "wallpaper" &&
+            (local.images || []).filter(function (i) { return i.id === s.heroImage; })[0];
+          var reading = s.readingImage && s.readingImage !== "none" &&
+            (local.images || []).filter(function (i) { return i.id === s.readingImage; })[0];
+          style.textContent = R.buildCss(s, urlFor, { wallpaper: wall, emptyImage: local.emptyImage,
+            heroImage: hero ? hero.data : null, readingImage: reading ? reading.data : null });
           document.documentElement.classList.toggle("ors-glass", s.style === "glass");
           schedule();
         });
@@ -87,27 +92,86 @@
     }
   }
 
+  var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+  var DAYS = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+
+  function firstName() {
+    var btn = document.querySelector('button[aria-label^="Меню "]');
+    if (!btn) return "";
+    // «Меню Фамилия Имя Отчество с подменю» → Имя
+    var parts = btn.getAttribute("aria-label").replace(/^Меню\s+/, "").replace(/\s+с подменю.*$/, "").split(/\s+/);
+    return parts.length >= 2 ? parts[1] : parts[0];
+  }
+
+  function inboxUnread() {
+    var name = document.querySelector('div[autoid="_n_a"] ._n_C4[title="Входящие"], div[autoid="_n_a"] ._n_C4[title="Inbox"]');
+    var row = name && name.closest('[role="treeitem"]');
+    var cnt = row && row.querySelector("._n_E4");
+    var n = cnt ? parseInt(cnt.textContent.replace(/\D/g, ""), 10) : 0;
+    return n || 0;
+  }
+
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  }
+
+  function setText(el, text) { if (el.textContent !== text) el.textContent = text; }
+
   function decorateHeader() {
+    var glass = settings.style === "glass";
+    var heroOn = glass && (+settings.heroHeight || 50) > 50;
+    var greetOn = glass && settings.greeting !== false;
+    var now = new Date(), h = now.getHours();
+    var hello = (h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер") +
+      (firstName() ? ", " + firstName() : "");
+
+    // Маленькое приветствие по центру шапки — когда баннер выключен.
     var center = document.querySelector("#O365_NavHeader .o365cs-nav-centerAlign");
     var greet = document.querySelector(".ors-greet");
-    var on = settings.style === "glass" && settings.greeting !== false;
-    if (!on || !center) { if (greet) greet.remove(); return; }
-    var btn = document.querySelector('button[aria-label^="Меню "]');
-    var first = "";
-    if (btn) {
-      // «Меню Фамилия Имя Отчество с подменю» → Имя
-      var parts = btn.getAttribute("aria-label").replace(/^Меню\s+/, "").replace(/\s+с подменю.*$/, "").split(/\s+/);
-      first = parts.length >= 2 ? parts[1] : parts[0];
+    if (greetOn && !heroOn && center) {
+      if (!greet) { greet = document.createElement("span"); greet.className = "ors-greet"; center.appendChild(greet); }
+      setText(greet, hello + " ✨");
+    } else if (greet) greet.remove();
+
+    // Крупный текст на баннере.
+    var headerView = document.getElementById("primaryHeaderView");
+    var hero = document.querySelector(".ors-hero");
+    if (heroOn && greetOn && headerView) {
+      if (!hero) {
+        hero = document.createElement("div");
+        hero.className = "ors-hero";
+        hero.appendChild(document.createElement("b"));
+        hero.appendChild(document.createElement("span"));
+        headerView.appendChild(hero);
+      }
+      var n = inboxUnread();
+      var sub = DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()] +
+        (n ? " · " + n + " " + plural(n, "непрочитанное", "непрочитанных", "непрочитанных") + " во входящих" : "");
+      setText(hero.firstChild, hello + " ✨");
+      setText(hero.lastChild, sub);
+    } else if (hero) hero.remove();
+  }
+
+  // Длинные названия папок обрезаем многоточием, чтобы не наезжали на счётчики.
+  function fitFolders() {
+    var card = document.querySelector('div[autoid="_n_a"]');
+    var names = card ? card.querySelectorAll("._n_C4") : [];
+    var on = settings.style === "glass";
+    if (!card) return;
+    var right = card.getBoundingClientRect().right - 16;
+    for (var i = 0; i < names.length; i++) {
+      var el = names[i];
+      if (!on) { el.classList.remove("ors-fit"); el.style.maxWidth = ""; continue; }
+      el.classList.add("ors-fit");
+      var row = el.closest('[role="treeitem"]');
+      var cnt = row && row.querySelector("._n_F4");
+      var cw = cnt && cnt.offsetWidth && cnt.textContent.trim() ? cnt.offsetWidth + 10 : 0;
+      var max = Math.max(40, Math.floor(right - el.getBoundingClientRect().left - cw - 6));
+      if (el.style.maxWidth !== max + "px") el.style.maxWidth = max + "px";
     }
-    var h = new Date().getHours();
-    var hello = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
-    var text = hello + (first ? ", " + first : "") + " ✨";
-    if (!greet) {
-      greet = document.createElement("span");
-      greet.className = "ors-greet";
-      center.appendChild(greet);
-    }
-    if (greet.textContent !== text) greet.textContent = text;
   }
 
   function decorateFolders() {
@@ -121,8 +185,12 @@
   function decorateReading() {
     var pane = document.querySelector("._n_Y");
     if (!pane) return;
-    var empty = settings.style === "glass" && pane.innerText.trim().length === 0;
+    // Письмо не открыто: в области чтения пусто или видна заглушка OWA «Чтобы прочитать сообщение…».
+    var stub = pane.querySelector("._n_O2");
+    var stubVisible = stub && stub.offsetParent !== null;
+    var empty = settings.style === "glass" && (stubVisible || pane.innerText.trim().length === 0);
     pane.classList.toggle("ors-reading-empty", empty);
+    pane.classList.toggle("ors-reading-stub", !!stubVisible);
   }
 
   // Держим наш стиль последним в <head>: так он перекрывает стили, которые OWA добавляет на ходу.
@@ -142,6 +210,7 @@
       decorateList();
       decorateHeader();
       decorateFolders();
+      fitFolders();
       decorateReading();
     }, 150);
   }
@@ -151,12 +220,13 @@
     new MutationObserver(function (muts) {
       for (var i = 0; i < muts.length; i++) {
         var n = muts[i].target;
-        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet"))) continue;
+        if (n && n.classList && (n.classList.contains("ors-av") || n.classList.contains("ors-greet") || n.classList.contains("ors-hero") || (n.parentElement && n.parentElement.classList && n.parentElement.classList.contains("ors-hero")))) continue;
         schedule();
         return;
       }
     }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     setInterval(schedule, 60000); // обновить приветствие по времени суток
+    window.addEventListener("resize", schedule);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);

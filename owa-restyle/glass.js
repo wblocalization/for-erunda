@@ -124,7 +124,7 @@
 
     // Иконки папок.
     if (s.folderIcons !== false) {
-      out.push("html ._n_C4::before,html #MailFolderPane\\.FavoritesHeader::before{content:\"\";display:inline-block;width:18px;height:18px;margin-right:10px;vertical-align:-4px;" +
+      out.push("html ._n_C4::before,html #MailFolderPane\\.FavoritesHeader::before{content:\"\";display:inline-block;width:16px;height:16px;margin-right:8px;vertical-align:-3px;" +
         "background:" + t.primary + ";-webkit-mask:" + ICONS.folder + " center/contain no-repeat;mask:" + ICONS.folder + " center/contain no-repeat}");
       FOLDERS.forEach(function (f) {
         var sel = f[1].map(function (n) { return "html ._n_C4[title=\"" + n + "\"]::before"; }).join(",");
@@ -147,9 +147,43 @@
     out.push("html ._n_O2>span.owaimg::before{content:none!important}");
 
     // Пустая область чтения: иллюстрация и подсказка (класс ставит content.js).
-    out.push("html ._n_Y.ors-reading-empty::after{content:\"Выберите письмо — оно откроется здесь\";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);" +
+    out.push("html ._n_Y.ors-reading-empty:not(.ors-reading-stub)::after{content:\"Выберите письмо — оно откроется здесь\";position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);" +
       "padding-top:200px;text-align:center;color:#6b6280;font:500 15px/1.4 var(--ors-font, \"Segoe UI\", sans-serif);" +
       "background:var(--ors-empty) center top/240px 180px no-repeat;pointer-events:none}");
+
+    // Панель папок шире (OWA задаёт 256px в inline-стилях; если ширину перетащить мышкой, оставляем как есть).
+    var FW = 296;
+    out.push("html [role=\"main\"]._n_X>div[style*=\"width: 256px\"]{width:" + FW + "px!important}");
+    out.push("html [role=\"main\"]._n_X>.vResize[style*=\"256px\"],html [role=\"main\"]._n_X>._n_X[style*=\"256px\"]{left:" + FW + "px!important}");
+    // Длинные названия папок — с многоточием (max-width выставляет content.js).
+    out.push("html div[autoid=\"_n_a\"] ._n_C4.ors-fit{display:inline-block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}");
+    out.push("html .o365cs-base.o365cst .o365cs-appLauncherBackground,html #O365_NavHeader .o365cs-nav-button{background-color:transparent!important}");
+
+    // Шапка-баннер.
+    var H = Math.max(50, Math.min(320, +s.heroHeight || 50));
+    if (H > 50) {
+      var heroBg = extras.heroImage ? "url(\"" + extras.heroImage + "\") center " + (+s.heroPos || 0) + "%/cover no-repeat" :
+        extras.wallpaper ? "transparent" : (th.header || gradient);
+      out.push("html #primaryHeaderView{height:" + H + "px!important;z-index:1}");
+      out.push(["inset: 50px", "inset:50px", "top: 50px", "top:50px"].map(function (v) { return "html #primaryContainer>div[style*=\"" + v + "\"],html #primaryContainer>a[style*=\"" + v + "\"]"; }).join(",") + "{top:" + H + "px!important}");
+      out.push("html ._n_c{height:" + H + "px!important}");
+      out.push("html #primaryHeaderView::before{content:\"\";position:absolute;inset:8px 8px 0 8px;border-radius:22px;z-index:-1;pointer-events:none;" +
+        "background:linear-gradient(180deg,rgba(0,0,0,.28) 0,rgba(0,0,0,0) 70px),linear-gradient(0deg,rgba(0,0,0,.36) 0,rgba(0,0,0,0) 65%)," + heroBg + ";" +
+        "box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px rgba(20,10,40,.15)}");
+      out.push("html #O365_NavHeader,html #O365_NavHeader.o365cs-topnavBGImage,html .o365cs-topnavBGColor-2{background:transparent!important;margin:8px 8px 0;border-radius:22px 22px 0 0}");
+      out.push("html .ors-hero{position:absolute;left:36px;right:36px;bottom:20px;color:#fff;pointer-events:none;text-shadow:0 2px 12px rgba(0,0,0,.35)}");
+      out.push("html .ors-hero b{display:block;font:700 " + (H >= 150 ? 34 : 24) + "px/1.15 var(--ors-display, var(--ors-font, \"Segoe UI\", sans-serif));letter-spacing:-.01em}");
+      out.push("html .ors-hero span{display:block;margin-top:6px;font:500 15px/1.3 var(--ors-font, \"Segoe UI\", sans-serif);opacity:.92}");
+      if (H < 110) out.push("html .ors-hero span{display:none}");
+    }
+
+    // Своя картинка в пустой области чтения (пока письмо не открыто).
+    if (extras.readingImage) {
+      out.push("html ._n_Y.ors-reading-empty::before{background:url(\"" + extras.readingImage + "\") center " + (+s.readingPos || 50) + "%/cover no-repeat}");
+      out.push("html ._n_Y.ors-reading-empty ._n_O2>span.owaimg,html ._n_Y.ors-reading-empty::after{display:none!important}");
+      out.push("html ._n_Y.ors-reading-empty ._n_O2{width:fit-content!important;max-width:90%;margin-left:auto!important;margin-right:auto!important;padding:10px 18px;border-radius:14px;" +
+        "background:rgba(255,255,255,.72);" + bf + ";box-shadow:0 6px 20px rgba(20,10,40,.15);white-space:nowrap}");
+    }
 
     // Приветствие в шапке.
     out.push("html .ors-greet{color:#fff;font:600 16px/50px var(--ors-display, var(--ors-font, \"Segoe UI\", sans-serif));letter-spacing:.01em;white-space:nowrap}");

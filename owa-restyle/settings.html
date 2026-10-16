@@ -25,6 +25,19 @@
       </div>
     </section>
 
+    <section id="glassOnly3">
+      <h2>Шапка</h2>
+      <div class="sliders">
+        <label>Высота шапки <input id="heroHeight" type="range" min="50" max="320" step="10"></label>
+      </div>
+      <div id="heroWrap">
+        <div id="heroes" class="walls"></div>
+        <div class="sliders">
+          <label>Сдвиг картинки ↕ <input id="heroPos" type="range" min="0" max="100" step="1"></label>
+        </div>
+      </div>
+    </section>
+
     <h2>Тема</h2>
     <div id="themes" class="grid"></div>
 
@@ -39,7 +52,14 @@
         <label><input type="checkbox" data-key="greeting"> Приветствие в шапке</label>
       </div>
 
-      <h2>Картинка для пустых мест</h2>
+      <h2>Картинка в области чтения</h2>
+      <p class="sub">Видна, пока письмо не открыто.</p>
+      <div id="readings" class="walls"></div>
+      <div class="sliders" id="readingPosWrap">
+        <label>Сдвиг картинки ↕ <input id="readingPos" type="range" min="0" max="100" step="1"></label>
+      </div>
+
+      <h2>Картинка для пустых папок</h2>
       <div class="emptyRow">
         <div id="emptyPreview" class="emptyPreview"></div>
         <div class="emptyBtns">

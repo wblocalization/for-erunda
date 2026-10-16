@@ -48,3 +48,4 @@ body.full .walls { grid-template-columns: repeat(4, 1fr); }
 .emptyBtns button:not(.link) { padding: 6px 10px; }
 .hint { color: var(--mute); font-size: 11px; margin: 16px 0 0; }
 [hidden] { display: none !important; }
+.sub { color: var(--mute); font-size: 11px; margin: -4px 0 7px; }
