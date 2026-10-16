@@ -286,7 +286,8 @@
   function lightSidebarCss(th) {
     var ink = mix(th.sidebar, "#000000", .35), soft = mix(ink, "#FFFFFF", .18);
     return [
-      "html #SidebarContainer .SidebarLink,html #SidebarContainer .SidebarLink .icon,html #SidebarContainer .SidebarLink i," +
+      "html #SidebarContainer .SidebarLink,html #SidebarContainer .SidebarLink .icon:not([class*=\"--icon\"]):not(.icon-check-circle):not(.icon-clock):not(.icon-minus-circle):not(.icon-circle-outline)," +
+        "html #SidebarContainer .SidebarLink i:not([class*=\"--icon\"]):not(.icon-check-circle):not(.icon-clock):not(.icon-minus-circle):not(.icon-circle-outline)," +
         "html #SidebarContainer .SidebarChannelLinkLabel{color:" + soft + "!important;opacity:1!important}",
       "html #SidebarContainer .SidebarChannel.unread .SidebarLink,html #SidebarContainer .SidebarChannel.unread .SidebarChannelLinkLabel," +
         "html #SidebarContainer .SidebarChannel.active .SidebarLink,html #SidebarContainer .SidebarChannel.active .SidebarChannelLinkLabel{color:" + ink + "!important;font-weight:700}",
@@ -326,6 +327,11 @@
       rule("away--icon", "var(--away-indicator)"),
       rule("dnd--icon", "var(--dnd-indicator)"),
       rule("offline--icon", "rgba(var(--sidebar-text-rgb),.5)"),
+      // Иконки статусов Band (compass-icons) — цвет по самой иконке, как бы она ни была обёрнута.
+      rule("icon-check-circle", "var(--online-indicator)"),
+      rule("icon-clock", "var(--away-indicator)"),
+      rule("icon-minus-circle", "var(--dnd-indicator)"),
+      rule("icon-circle-outline", "rgba(var(--sidebar-text-rgb),.5)"),
       // Старый вариант разметки статуса (svg внутри .status).
       "html #SidebarContainer .status.online svg,html #SidebarContainer .status--online svg{fill:var(--online-indicator)!important}",
       "html #SidebarContainer .status.away svg,html #SidebarContainer .status--away svg{fill:var(--away-indicator)!important}",
