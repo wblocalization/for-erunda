@@ -110,10 +110,19 @@
       "._lvv_X", "._lvv_W", "._lvv_X1", "._lvv_W1", "._n_Z", "._n_31", ".folderHeadContainer", "._n_g1",
       "._n_d4", "._n_h4", "._n_j4", "._lvv_42"
     ].map(function (x) { return "html " + x; }).join(",") + "{background-color:transparent!important}");
-    out.push("html button._n_j{background-color:rgba(255,255,255,.7)!important;border-color:rgba(255,255,255,.8)!important}");
+    // Поиск: аккуратная «пилюля» с лупой слева.
+    out.push("html button._n_j{display:flex!important;align-items:center;gap:10px;height:40px!important;min-height:0!important;margin:12px 12px 0!important;width:calc(100% - 24px)!important;" +
+      "padding:0 14px!important;box-sizing:border-box!important;position:relative!important;top:auto!important;left:auto!important;line-height:normal!important;" +
+      "background:rgba(255,255,255,.85)!important;border:1px solid rgba(255,255,255,.9)!important;border-radius:12px!important;box-shadow:0 2px 8px rgba(20,10,40,.06)!important;" +
+      "text-align:left;white-space:nowrap;overflow:hidden;cursor:text;transition:box-shadow .15s,background-color .15s}");
+    out.push("html button._n_j:hover{background:#fff!important;box-shadow:0 0 0 3px " + rgba(t.primary, .14) + ",0 2px 8px rgba(20,10,40,.06)!important}");
+    out.push("html button._n_j ._n_m{order:-1;flex:none;position:static!important;float:none!important;margin:0!important;font-size:16px!important;line-height:1!important;width:auto!important;height:auto!important}");
+    out.push("html button._n_j ._n_m:before{color:" + t.primary + "!important}");
+    out.push("html button._n_j ._n_l{flex:1;min-width:0;position:static!important;float:none!important;margin:0!important;padding:0!important;line-height:normal!important;" +
+      "overflow:hidden;text-overflow:ellipsis;font-size:14px!important;color:#6b6f7a!important}");
     // Дерево папок в OWA имеет фиксированную ширину 256px — подгоняем под ширину карточки.
     out.push("html div[autoid=\"_n_a\"] ._n_j4>div{width:auto!important;right:0!important}");
-    out.push("html button._n_j{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}");
+
 
     // Строки списка писем: мягкие карточки при наведении и выборе.
     out.push("html [role=\"option\"]._lvv_C1{border-radius:12px;margin:2px 8px;border-bottom-color:transparent!important}");
