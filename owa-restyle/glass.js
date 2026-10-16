@@ -208,7 +208,7 @@
       var split = s.heroLayout !== "wide" && H >= 150;
       var card = "border-radius:22px;z-index:-1;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35),0 10px 30px rgba(20,10,40,.15)";
       var shade = "linear-gradient(180deg,rgba(0,0,0,.28) 0,rgba(0,0,0,0) 70px),linear-gradient(0deg,rgba(0,0,0,.36) 0,rgba(0,0,0,0) 65%),";
-      out.push(":root{--ors-w:min(470px,38vw)}");
+      out.push(":root{--ors-w:min(520px,41vw)}");
       out.push("html #primaryHeaderView::before{content:\"\";position:absolute;" +
         (split ? "inset:8px calc(var(--ors-w) + 16px) 0 8px;" : "inset:8px 8px 0 8px;") + card + ";background:" + shade + heroBg + "}");
       out.push("html #O365_NavHeader,html #O365_NavHeader.o365cs-topnavBGImage,html .o365cs-topnavBGColor-2{background:transparent!important;margin:8px 8px 0;border-radius:22px 22px 0 0}");
