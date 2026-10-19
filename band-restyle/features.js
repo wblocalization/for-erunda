@@ -21,7 +21,14 @@
     }
     return fetch("/api/v4" + path, { method: method || "GET", credentials: "include", headers: headers, body: body ? JSON.stringify(body) : undefined })
       .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status + " " + path);
+        if (!r.ok) {
+          // Mattermost объясняет ошибку в поле message — покажем его, а не только код.
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            var err = new Error("HTTP " + r.status + (j && j.message ? ": " + j.message : " " + path));
+            err.status = r.status;
+            throw err;
+          });
+        }
         return r.status === 204 ? null : r.json().catch(function () { return null; });
       });
   }
@@ -129,22 +136,45 @@
     }).filter(Boolean).slice(0, 6);
   }
 
-  function setStatus(pr) {
-    var body = { emoji: pr.emoji, text: pr.text };
-    if (pr.forever) {
-      body.duration = "dont_clear"; // «Не очищать» — статус висит, пока его не сбросят
-    } else if (pr.minutes) {
-      body.duration = "date_and_time";
-      body.expires_at = new Date(Date.now() + pr.minutes * 60000).toISOString();
-    } else {
-      body.duration = "today";
-      var end = new Date(); end.setHours(23, 59, 59, 0);
-      body.expires_at = end.toISOString();
+  // Варианты запроса для статуса: разные версии Band принимают срок по-разному.
+  function statusBodies(pr) {
+    var base = { emoji: pr.emoji, text: pr.text };
+    function w(extra) { return Object.assign({}, base, extra); }
+    if (pr.forever) return [w({ duration: "" }), base];
+    var end;
+    if (pr.minutes) {
+      end = new Date(Date.now() + pr.minutes * 60000);
+      end.setSeconds(0, 0);
+      var preset = { 30: "thirty_minutes", 60: "one_hour", 240: "four_hours" }[pr.minutes];
+      var list = [];
+      if (preset) list.push(w({ duration: preset, expires_at: end.toISOString() }));
+      list.push(w({ duration: "date_and_time", expires_at: end.toISOString() }));
+      list.push(w({ duration: "custom_date_time", expires_at: end.toISOString() }));
+      return list;
     }
-    return api("/users/me/status/custom", "PUT", body).then(function () {
+    end = new Date(); end.setHours(23, 59, 59, 0);
+    return [w({ duration: "today", expires_at: end.toISOString() }), w({ duration: "date_and_time", expires_at: end.toISOString() })];
+  }
+
+  function setStatus(pr) {
+    var bodies = statusBodies(pr), firstErr = null;
+    function attempt(i) {
+      if (i >= bodies.length) {
+        // Последняя попытка — без срока: лучше статус без автоснятия, чем никакого.
+        return api("/users/me/status/custom", "PUT", { emoji: pr.emoji, text: pr.text }).then(function () { return "nolimit"; });
+      }
+      return api("/users/me/status/custom", "PUT", bodies[i]).then(function () { return "ok"; }, function (e) {
+        firstErr = firstErr || e;
+        if (e.status !== 400) throw e;
+        return attempt(i + 1);
+      });
+    }
+    var label = pr.forever ? " — без срока" : pr.minutes ? " до " + hhmm(new Date(Date.now() + pr.minutes * 60000)) : " до конца дня";
+    return attempt(0).then(function (res) {
       cache.me = null;
-      toast((EMOJI[pr.emoji] || "💬") + " Статус: " + pr.text + (pr.forever ? " — без срока" : pr.minutes ? " до " + hhmm(new Date(Date.now() + pr.minutes * 60000)) : " до конца дня"));
-    }, function (e) { toast("Не получилось поставить статус (" + e.message + ")"); });
+      if (res === "nolimit" && !pr.forever) toast((EMOJI[pr.emoji] || "💬") + " Статус: " + pr.text + " — Band не принял срок, сними его вручную или кнопкой «Сбросить»");
+      else toast((EMOJI[pr.emoji] || "💬") + " Статус: " + pr.text + label);
+    }, function (e) { toast("Не получилось поставить статус (" + ((firstErr || e).message) + ")"); });
   }
 
   function clearStatus() {
