@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Tracker Restyle — настройки</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Вид трекера</h1>
+      <button id="openFull" class="link" hidden>Все настройки ↗</button>
+    </header>
+
+    <h2>Стиль</h2>
+    <div id="styles" class="seg"></div>
+
+    <section id="glassOnly">
+      <h2>Фон</h2>
+      <div id="walls" class="walls"></div>
+      <input id="wallFile" type="file" accept="image/*" multiple hidden>
+      <div class="sliders">
+        <label>Затемнение <input id="dim" type="range" min="0" max="50" step="1"></label>
+        <label>Размытие стекла <input id="blur" type="range" min="0" max="40" step="1"></label>
+        <label>Непрозрачность панели с задачами <input id="panelOpacity" type="range" min="50" max="100" step="1"></label>
+        <label>Скругление углов <input id="radius" type="range" min="0" max="28" step="1"></label>
+      </div>
+
+      <h2>Боковая панель</h2>
+      <div id="sidebarTones" class="seg3"></div>
+    </section>
+
+    <h2>Тема</h2>
+    <div id="themes" class="grid"></div>
+    <div id="customColors" class="colors">
+      <label><input id="customColor" type="color"> Основной цвет <small>кнопки, вкладки, номера задач</small></label>
+      <label><input id="customColor2" type="color"> Второй цвет <small>градиенты и активный пункт меню</small></label>
+    </div>
+
+    <h2>Текст</h2>
+    <div id="textSizes" class="seg3"></div>
+    <div class="toggles" style="margin-top:10px">
+      <label><input type="checkbox" data-key="solidText"> Тёмный текст вместо бледно-серого</label>
+      <label><input type="checkbox" data-key="statusStripes"> Цветная полоска на карточке по статусу</label>
+      <label><input type="checkbox" data-key="hideSurvey"> Прятать полоску «Пройти опрос» сверху</label>
+    </div>
+
+    <h2>Шрифт</h2>
+    <div id="fonts" class="list"></div>
+    <p class="sub" style="margin-top:12px">Заголовок доски</p>
+    <div id="displayFonts" class="list"></div>
+
+    <p class="hint">Свои картинки хранятся только в этом браузере. Код в задачах остаётся моноширинным.</p>
+  </main>
+  <script src="themes.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>
