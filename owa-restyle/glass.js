@@ -142,7 +142,9 @@
       "._n_d4", "._n_h4", "._n_j4", "._lvv_42"
     ].map(function (x) { return "html " + x; }).join(",") + "{background-color:transparent!important}");
     // Поиск: аккуратная «пилюля» с лупой слева.
-    out.push("html button._n_j{display:flex!important;align-items:center;gap:10px;height:40px!important;min-height:0!important;margin:12px 12px 0!important;width:calc(100% - 24px)!important;" +
+    // Пока идёт поиск, OWA прячет кнопку inline-стилем display:none и ставит на её место поле ввода — тогда не показываем её.
+    out.push("html button._n_j[style*=\"display: none\"],html button._n_j[style*=\"display:none\"]{display:none!important}");
+    out.push("html button._n_j:not([style*=\"display: none\"]):not([style*=\"display:none\"]){display:flex!important;align-items:center;gap:10px;height:40px!important;min-height:0!important;margin:12px 12px 0!important;width:calc(100% - 24px)!important;" +
       "padding:0 14px!important;box-sizing:border-box!important;position:relative!important;top:auto!important;left:auto!important;line-height:normal!important;" +
       "background:rgba(255,255,255,.85)!important;border:1px solid rgba(255,255,255,.9)!important;border-radius:12px!important;box-shadow:0 2px 8px rgba(20,10,40,.06)!important;" +
       "text-align:left;white-space:nowrap;overflow:hidden;cursor:text;transition:box-shadow .15s,background-color .15s}");
@@ -284,6 +286,10 @@
       out.push("html ._n_Y.ors-reading-empty::before{background:url(\"" + extras.readingImage + "\") center " + (+s.readingPos || 50) + "%/cover no-repeat}");
       out.push("html ._n_Y.ors-reading-empty ._n_O2>span.owaimg,html ._n_Y.ors-reading-empty::after{display:none!important}");
       out.push("html ._n_Y.ors-reading-empty ._n_O2{background:none!important;box-shadow:none!important}");
+      // Подсказки OWA («Выберите элемент…», «Щелкните здесь, чтобы…») — на плашках, иначе их не видно на картинке.
+      out.push("html ._n_Y.ors-reading-empty ._n_O2>:not(span.owaimg):not(._n_Q2){display:block!important;width:fit-content!important;max-width:90%;margin:10px auto 0!important;padding:6px 14px!important;border-radius:12px;" +
+        "background:rgba(255,255,255,.75);" + bf + ";box-shadow:0 6px 20px rgba(20,10,40,.15);white-space:normal;text-align:center;position:relative!important;left:auto!important;right:auto!important}");
+      out.push("html ._n_Y.ors-reading-empty ._n_O2>:not(span.owaimg):not(._n_Q2):empty{display:none!important}");
       out.push("html ._n_Y.ors-reading-empty ._n_O2 ._n_Q2{display:inline-block!important;width:auto!important;max-width:90%;padding:10px 18px!important;border-radius:14px;" +
         "background:rgba(255,255,255,.75);" + bf + ";box-shadow:0 6px 20px rgba(20,10,40,.15);white-space:normal;text-align:center;margin:0 auto!important;position:relative!important;left:auto!important;right:auto!important}");
       out.push("html ._n_Y.ors-reading-empty ._n_O2 ._n_Q2:empty{display:none!important}");
