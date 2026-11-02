@@ -1,0 +1,71 @@
+name: Обновить сайт
+
+on:
+  schedule:
+    - cron: "17 * * * *"   # каждый час
+  workflow_dispatch:        # кнопка «Run workflow»
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить настройки
+        id: check
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: |
+          if [ -z "$SITE_PASSWORD" ]; then
+            echo "::notice::Сайт не собран: добавьте секрет SITE_PASSWORD (Settings → Secrets and variables → Actions)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Забрать термины из таблицы
+        if: steps.check.outputs.ready == 'true'
+        env:
+          TERMBASE_URL: ${{ secrets.TERMBASE_URL }}
+          TERMBASE_TOKEN: ${{ secrets.TERMBASE_TOKEN }}
+        run: |
+          if [ -z "$TERMBASE_URL" ]; then
+            echo "::notice::Таблица ещё не подключена (нет секрета TERMBASE_URL) — на сайте демо-термины."
+            cp demo-data.json data.json
+          else
+            curl -fsSL --retry 3 "$TERMBASE_URL?token=$TERMBASE_TOKEN" -o data.json
+          fi
+
+      - name: Зашифровать паролем
+        if: steps.check.outputs.ready == 'true'
+        env:
+          SITE_PASSWORD: ${{ secrets.SITE_PASSWORD }}
+        run: |
+          mkdir -p _site
+          node build.js "$SITE_PASSWORD" data.json _site/index.html
+          touch _site/.nojekyll
+          rm -f data.json
+
+      - uses: actions/configure-pages@v5
+        if: steps.check.outputs.ready == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.check.outputs.ready == 'true'
+        with:
+          path: _site
+      - id: deploy
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#2a1f4a">
+<title>Термбаза</title>
+<style>
+:root{
+  --bg:#f7f1fb;--bg2:#fff6ef;--card:rgba(255,255,255,.72);--card-solid:#fff;--ink:#241c33;--mute:#7c7190;--line:rgba(120,90,160,.16);
+  --a1:#ff9a7a;--a2:#f0568f;--a3:#8a5cf6;--ok:#22a06b;--warn:#d4880f;--bad:#d23c5a;
+  --grad:linear-gradient(120deg,var(--a1),var(--a2) 45%,var(--a3));
+  --shadow:0 10px 30px -12px rgba(70,30,110,.25);--ring:0 0 0 3px rgba(240,86,143,.18);
+  --r:20px;--ease:cubic-bezier(.2,.8,.2,1);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#120e1c;--bg2:#1a1226;--card:rgba(34,26,48,.72);--card-solid:#221a30;--ink:#f3eefb;--mute:#a597bb;--line:rgba(200,170,255,.14);
+  --shadow:0 10px 30px -12px rgba(0,0,0,.6)}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;font:15px/1.5 -apple-system,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);
+  background:var(--bg);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+a{color:inherit}
+.hidden{display:none!important}
+
+/* Живой фон: мягкие цветные пятна плавают */
+.aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;background:linear-gradient(160deg,var(--bg),var(--bg2))}
+.aurora i{position:absolute;width:55vmax;height:55vmax;border-radius:50%;filter:blur(70px);opacity:.45;animation:drift 22s var(--ease) infinite alternate}
+.aurora i:nth-child(1){background:#ffb59a;left:-15vmax;top:-20vmax}
+.aurora i:nth-child(2){background:#f58ab5;right:-20vmax;top:10vmax;animation-duration:26s;animation-delay:-6s}
+.aurora i:nth-child(3){background:#a98bff;left:20vmax;bottom:-30vmax;animation-duration:30s;animation-delay:-12s}
+@media (prefers-color-scheme:dark){.aurora i{opacity:.22}}
+@keyframes drift{to{transform:translate(8vmax,6vmax) scale(1.15)}}
+
+/* ---------- вход ---------- */
+#lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.lockcard{width:100%;max-width:380px;background:var(--card);backdrop-filter:blur(24px) saturate(1.4);-webkit-backdrop-filter:blur(24px) saturate(1.4);
+  border:1px solid var(--line);border-radius:28px;padding:34px 26px 26px;box-shadow:var(--shadow);text-align:center;animation:rise .7s var(--ease) both}
+.logo{width:64px;height:64px;margin:0 auto 14px;border-radius:20px;display:grid;place-items:center;font-size:30px;background:var(--grad);
+  box-shadow:0 12px 30px -10px rgba(240,86,143,.7);position:relative;overflow:hidden}
+.logo:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);
+  transform:translateX(-120%);animation:shine 3.2s 1s infinite}
+@keyframes shine{40%,100%{transform:translateX(120%)}}
+.lockcard h1{margin:0 0 6px;font-size:26px;letter-spacing:-.02em}
+.lockcard p{margin:0 0 22px;color:var(--mute);font-size:14px}
+.field{position:relative}
+.field input{width:100%;padding:15px 48px 15px 16px;border-radius:16px;border:1px solid var(--line);background:var(--card-solid);color:var(--ink);font-size:16px;outline:none;transition:.2s}
+.field input:focus{border-color:var(--a2);box-shadow:var(--ring)}
+.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px;opacity:.55;padding:6px}
+.remember{display:flex;gap:8px;align-items:center;justify-content:center;margin:14px 0 2px;color:var(--mute);font-size:13px}
+.btn{position:relative;width:100%;margin-top:14px;border:0;border-radius:16px;padding:15px;font-weight:700;font-size:15px;color:#fff;background:var(--grad);
+  background-size:200% 100%;box-shadow:0 12px 26px -12px rgba(240,86,143,.8);transition:transform .15s,background-position .6s}
+.btn:hover{background-position:100% 0}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.7}
+.btn .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:var(--bad);font-size:13px;min-height:20px;margin-top:10px}
+.shake{animation:shake .4s}
+@keyframes shake{20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+.unlocked .lockcard{animation:out .45s var(--ease) forwards}
+@keyframes out{to{opacity:0;transform:scale(.92) translateY(-12px);filter:blur(6px)}}
+@keyframes rise{from{opacity:0;transform:translateY(18px) scale(.98)}}
+
+/* ---------- шапка ---------- */
+header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(18px) saturate(1.4);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);border-bottom:1px solid var(--line)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 18px}
+.top{display:flex;align-items:center;gap:12px;padding:14px 0 10px}
+.top .logo{width:38px;height:38px;border-radius:12px;font-size:18px;margin:0;flex:none}
+.top h1{font-size:19px;margin:0;flex:1;letter-spacing:-.01em;line-height:1.2}
+.top small{display:block;font-weight:400;color:var(--mute);font-size:12px}
+.ghost{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 12px;font-size:13px;transition:.2s;white-space:nowrap}
+.ghost:hover{border-color:var(--a2);color:var(--a2)}
+
+/* вкладки языков со скользящим индикатором */
+.tabs{position:relative;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -18px;padding:2px 18px 10px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{position:relative;z-index:1;flex:none;border:0;background:none;border-radius:999px;padding:7px 14px;font-size:14px;font-weight:600;color:var(--mute);transition:color .3s}
+.tab small{font-weight:500;opacity:.75;margin-left:5px;font-size:11px}
+.tab.on{color:#fff}
+.pill{position:absolute;z-index:0;top:2px;height:calc(100% - 12px);border-radius:999px;background:var(--grad);box-shadow:0 8px 20px -8px rgba(240,86,143,.8);
+  transition:left .45s var(--ease),width .45s var(--ease)}
+
+.search{position:relative;margin:2px 0 10px}
+.search input{width:100%;padding:14px 44px 14px 46px;border-radius:16px;border:1px solid var(--line);background:var(--card-solid);color:var(--ink);font-size:16px;outline:none;transition:.2s;box-shadow:var(--shadow)}
+.search input:focus{border-color:var(--a2);box-shadow:var(--ring),var(--shadow)}
+.search .ic{position:absolute;left:16px;top:50%;transform:translateY(-50%);opacity:.55}
+.search kbd{position:absolute;right:14px;top:50%;transform:translateY(-50%);font:12px ui-monospace,Menlo,monospace;color:var(--mute);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+.filters{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:12px;align-items:center}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:13px;transition:.2s}
+.chip:hover{border-color:var(--a2)}
+.chip.on{background:color-mix(in srgb,var(--a2) 14%,var(--card-solid));border-color:var(--a2);color:var(--a2);font-weight:600}
+select.chip{appearance:none;padding-right:28px;background-image:linear-gradient(45deg,transparent 50%,var(--mute) 50%),linear-gradient(135deg,var(--mute) 50%,transparent 50%);
+  background-position:calc(100% - 14px) 55%,calc(100% - 10px) 55%;background-size:4px 4px;background-repeat:no-repeat}
+
+/* ---------- содержимое ---------- */
+main{padding-bottom:60px}
+.langhead{display:flex;align-items:center;gap:16px;margin:18px 0 6px;flex-wrap:wrap;animation:rise .5s var(--ease) both}
+.langhead h2{margin:0;font-size:28px;letter-spacing:-.02em}
+.langhead .code{font:700 12px ui-monospace,Menlo,monospace;color:#fff;background:var(--grad);border-radius:8px;padding:3px 8px}
+.progress{flex:1;min-width:180px}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px;background:var(--grad);width:0;transition:width 1s var(--ease)}
+.progress small{color:var(--mute);font-size:12px}
+.count{color:var(--mute);font-size:13px;margin:14px 2px 10px}
+
+.list{display:grid;gap:12px}
+.card{background:var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:var(--r);
+  padding:16px 18px;box-shadow:var(--shadow);animation:rise .5s var(--ease) both;transition:transform .25s var(--ease),box-shadow .25s,border-color .25s;scroll-margin-top:200px}
+.card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--a2) 35%,var(--line))}
+.card.flash{border-color:var(--a2);box-shadow:var(--ring),var(--shadow)}
+.head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.ru{font-size:20px;font-weight:750;letter-spacing:-.01em}
+.en{color:var(--mute);font-size:16px}
+.badges{display:flex;gap:6px;margin-left:auto;align-items:center;flex-wrap:wrap}
+.b{font-size:11.5px;border-radius:999px;padding:2px 9px;background:color-mix(in srgb,var(--a3) 12%,transparent);color:var(--a3);font-weight:650}
+.b.new{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.b.chg{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.b.bl{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.block .ru{color:var(--bad);text-decoration:line-through}
+.idb{font:12px ui-monospace,Menlo,Consolas,monospace;color:var(--mute);border:0;background:none;padding:2px 4px;border-radius:6px}
+.idb:hover{color:var(--a2);background:color-mix(in srgb,var(--a2) 10%,transparent)}
+.def{margin:6px 0 0}
+.ex{margin:4px 0 0;color:var(--mute);font-style:italic}
+.ex:before{content:"Пример: ";font-style:normal}
+.edit{display:inline-block;margin-top:8px;font-size:12.5px;color:var(--mute);text-decoration:none;border-bottom:1px dashed currentColor}
+.edit:hover{color:var(--a2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-top:12px}
+.tr{border:1px solid var(--line);border-radius:14px;padding:9px 11px;position:relative;background:color-mix(in srgb,var(--card-solid) 60%,transparent);transition:.2s}
+.tr:hover{border-color:color-mix(in srgb,var(--a2) 40%,var(--line))}
+.tr .l{font:700 11px ui-monospace,Menlo,Consolas,monospace;color:var(--a2);letter-spacing:.05em}
+.tr .t{font-size:16px;padding-right:26px;word-break:break-word}
+.tr.empty .t{color:var(--mute);font-size:13px;font-style:italic}
+.cp{position:absolute;right:6px;top:6px;border:0;background:none;opacity:.4;font-size:14px;padding:5px;border-radius:8px;transition:.2s}
+.cp:hover{opacity:1;background:color-mix(in srgb,var(--a2) 10%,transparent)}
+.cp.done{opacity:1;color:var(--ok);transform:scale(1.2)}
+.var{margin-top:6px;font-size:13px;color:var(--mute);border-top:1px dashed var(--line);padding-top:5px}
+.var b{color:var(--ink);font-weight:650}
+
+/* вкладка одного языка: строка «RU → перевод» */
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:16px;align-items:start}
+.row .src .ru{font-size:17px}
+.row .src .en{display:block;font-size:14px}
+.row .src .def{font-size:13.5px;color:var(--mute);margin-top:4px}
+.row .dst{position:relative;border-left:3px solid transparent;border-image:var(--grad) 1;padding-left:14px}
+.row .dst .t{font-size:20px;font-weight:650;padding-right:30px;word-break:break-word}
+.row .dst.empty .t{font-size:14px;font-weight:400;color:var(--mute);font-style:italic}
+@media (max-width:640px){.row{grid-template-columns:1fr;gap:10px}.row .dst{padding-left:12px}}
+
+mark{background:linear-gradient(transparent 55%,rgba(255,154,122,.55) 55%);color:inherit;padding:0 1px}
+.emptyres{text-align:center;color:var(--mute);padding:50px 0;animation:rise .4s var(--ease) both}
+.emptyres b{display:block;font-size:40px;margin-bottom:6px}
+
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px) scale(.95);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:14px;
+  opacity:0;transition:.3s var(--ease);pointer-events:none;z-index:50;box-shadow:var(--shadow)}
+.toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.totop{position:fixed;right:18px;bottom:22px;width:44px;height:44px;border-radius:50%;border:0;background:var(--grad);color:#fff;font-size:18px;box-shadow:var(--shadow);
+  opacity:0;transform:translateY(16px);transition:.3s var(--ease);pointer-events:none;z-index:30}
+.totop.show{opacity:1;transform:none;pointer-events:auto}
+
+/* ---------- «Как это работает» ---------- */
+.sheet-bg{position:fixed;inset:0;z-index:40;background:rgba(20,10,30,.35);backdrop-filter:blur(4px);opacity:0;transition:opacity .3s;pointer-events:none}
+.sheet-bg.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;z-index:41;left:50%;bottom:0;width:min(720px,100%);max-height:88vh;overflow:auto;background:var(--card-solid);border-radius:28px 28px 0 0;
+  padding:12px 24px 34px;box-shadow:0 -20px 60px -20px rgba(40,10,70,.5);transform:translate(-50%,105%);transition:transform .5s var(--ease)}
+.sheet.show{transform:translate(-50%,0)}
+.grab{width:44px;height:5px;border-radius:9px;background:var(--line);margin:0 auto 14px}
+.sheet h2{margin:4px 0 4px;font-size:24px}
+.sheet .lead{color:var(--mute);margin:0 0 18px}
+.flow{display:grid;gap:10px}
+.step{display:grid;grid-template-columns:44px 1fr;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:18px;position:relative}
+.step .n{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:color-mix(in srgb,var(--a2) 12%,transparent)}
+.step b{display:block;margin-bottom:2px}
+.step p{margin:0;color:var(--mute);font-size:14px}
+.step a{color:var(--a2);font-weight:600}
+.step+.step:before{content:"";position:absolute;left:35px;top:-11px;width:2px;height:10px;background:var(--grad)}
+.faq{margin-top:18px}
+.faq details{border-bottom:1px solid var(--line);padding:10px 2px}
+.faq summary{cursor:pointer;font-weight:650;list-style:none}
+.faq summary:before{content:"＋";display:inline-block;width:22px;color:var(--a2);transition:transform .3s}
+.faq details[open] summary:before{transform:rotate(45deg)}
+.faq details p{margin:8px 0 2px 22px;color:var(--mute);font-size:14px}
+.close{position:absolute;right:16px;top:14px;border:0;background:var(--line);width:34px;height:34px;border-radius:50%;font-size:16px}
+
+@media (max-width:600px){
+  .top{padding:10px 0 8px}.top h1{font-size:17px}.ghost{padding:6px 9px;font-size:12px}
+  .filters{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -18px;padding:0 18px 12px}
+  .filters::-webkit-scrollbar{display:none}.chip{flex:none}
+  .grid{grid-template-columns:1fr 1fr;gap:6px}.tr .t{font-size:15px}
+  .card{padding:14px}.ru{font-size:18px}.search kbd{display:none}
+  #how{font-size:0;width:34px;padding:6px 0}#how:before{content:"?";font-size:15px;font-weight:700}
+  .top small{font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="aurora"><i></i><i></i><i></i></div>
+
+<div id="lock">
+  <form class="lockcard" id="lockform">
+    <div class="logo">📖</div>
+    <h1>Термбаза</h1>
+    <p>Глоссарий команды локализации</p>
+    <div class="field">
+      <input type="password" id="pw" placeholder="Пароль" autocomplete="current-password" autofocus>
+      <button type="button" class="eye" id="eye" title="Показать пароль">👁</button>
+    </div>
+    <label class="remember"><input type="checkbox" id="rem" checked> Запомнить на этом устройстве</label>
+    <button class="btn" id="go">Открыть</button>
+    <div class="err" id="err"></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header><div class="wrap">
+    <div class="top">
+      <div class="logo">📖</div>
+      <h1>Термбаза <small id="upd"></small></h1>
+      <button class="ghost" id="how">Как это работает?</button>
+      <button class="ghost" id="logout" title="Забыть пароль на этом устройстве">Выйти</button>
+    </div>
+    <nav class="tabs" id="tabs"><span class="pill" id="pill"></span></nav>
+    <div class="search"><span class="ic">🔍</span><input id="q" type="search" placeholder="Поиск по всем языкам…" autocomplete="off"><kbd>/</kbd></div>
+    <div class="filters" id="filters"></div>
+  </div></header>
+  <main class="wrap">
+    <div id="langhead"></div>
+    <div class="count" id="count"></div>
+    <div class="list" id="list"></div>
+  </main>
+</div>
+
+<div class="sheet-bg" id="sheetbg"></div>
+<section class="sheet" id="sheet" aria-label="Как это работает">
+  <div class="grab"></div>
+  <button class="close" id="close" aria-label="Закрыть">✕</button>
+  <h2>Как это работает</h2>
+  <p class="lead">Сайт — витрина для поиска. Править здесь ничего нельзя: всё живёт в Google Таблицах, а сайт показывает их копию.</p>
+  <div class="flow">
+    <div class="step"><div class="n">📝</div><div><b>1. Termbase — русский и английский</b>
+      <p>Новый термин предлагают на вкладке «Предложения». Английская команда проверяет и утверждает. <span id="lnk-termbase"></span></p></div></div>
+    <div class="step"><div class="n">🌍</div><div><b>2. Таблица на все языки — переводы</b>
+      <p>Утверждённый термин сам приезжает сюда (строка зелёная, «новый»). Штатные переводчики вписывают перевод в колонку своего языка, а варианты — на вкладку «Варианты». Каждая правка перевода записывается в «Журнал переводов»: кто, когда, было → стало. <span id="lnk-table"></span></p></div></div>
+    <div class="step"><div class="n">🔄</div><div><b>3. Раз в час — на сайт</b>
+      <p>GitHub забирает термины из таблицы на все языки, шифрует паролем и обновляет сайт. Время последнего обновления — вверху под заголовком.</p></div></div>
+    <div class="step"><div class="n">🔍</div><div><b>4. Сайт — только смотреть</b>
+      <p>Поиск, вкладки по языкам, копирование, ссылки на термин. Без пароля содержимое не прочитать.</p></div></div>
+  </div>
+  <div class="faq">
+    <details><summary>Нашла ошибку в переводе — что делать?</summary>
+      <p>Нажмите «поправить в таблице» под термином: откроется его строка. Поправьте там — через час исправление появится на сайте. Старое значение останется в «Журнале переводов».</p></details>
+    <details><summary>Где хранятся данные?</summary>
+      <p>Только в Google Таблицах (Termbase и таблица на все языки). Сайт хранит зашифрованную копию; в репозитории GitHub терминов нет.</p></details>
+    <details><summary>Почему я не вижу свежий термин?</summary>
+      <p>Сайт обновляется раз в час. Ещё термин мог не дойти: он должен быть утверждён в Termbase и пролит в таблицу на все языки.</p></details>
+    <details><summary>Что значат цветные метки?</summary>
+      <p>«новый» — недавно пришёл из Termbase; «изменён» — после утверждения поменялись RU, EN, определение или проект; «блок-лист» — такие слова не используем.</p></details>
+    <details><summary>Как поделиться термином или языком?</summary>
+      <p>Нажмите на ID термина — скопируется ссылка прямо на него. У каждой вкладки языка своя ссылка: откройте вкладку и скопируйте адрес из браузера.</p></details>
+  </div>
+</section>
+
+<button class="totop" id="totop" aria-label="Наверх">↑</button>
+<div class="toast" id="toast"></div>
+
+<script>
+const PAYLOAD = /*PAYLOAD*/null;
+const KEY_STORE = "termbase-key-" + (PAYLOAD ? PAYLOAD.salt.slice(0, 12) : "");
+const LANG_NAMES = {KA: "Грузинский", HY: "Армянский", KK: "Казахский", KY: "Киргизский", TR: "Турецкий", TG: "Таджикский", UZ: "Узбекский", ZH: "Китайский", EN: "Английский"};
+const BLOCK = "Блок лист";
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const ub64 = a => btoa(String.fromCharCode.apply(null, new Uint8Array(a)));
+const $ = id => document.getElementById(id);
+
+// ---------- вход ----------
+async function deriveKey(pw) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name: "PBKDF2", salt: b64(PAYLOAD.salt), iterations: PAYLOAD.iter, hash: "SHA-256"},
+    base, {name: "AES-GCM", length: 256}, true, ["decrypt"]);
+}
+async function decrypt(key) {
+  const plain = await crypto.subtle.decrypt({name: "AES-GCM", iv: b64(PAYLOAD.iv)}, key, b64(PAYLOAD.ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+function store(get, val) {
+  try { if (get) return localStorage.getItem(KEY_STORE); if (val) localStorage.setItem(KEY_STORE, val); else localStorage.removeItem(KEY_STORE); }
+  catch (e) { return null; }
+}
+async function tryStored() {
+  const raw = store(true);
+  if (!raw) return;
+  try {
+    const key = await crypto.subtle.importKey("raw", b64(raw), "AES-GCM", false, ["decrypt"]);
+    start(await decrypt(key), false);
+  } catch (e) { store(false, null); }
+}
+$("eye").onclick = () => { const i = $("pw"); i.type = i.type === "password" ? "text" : "password"; i.focus(); };
+$("lockform").onsubmit = async e => {
+  e.preventDefault();
+  const pw = $("pw").value;
+  if (!pw) return;
+  $("go").disabled = true; $("go").innerHTML = '<span class="spin"></span>Открываю…'; $("err").textContent = "";
+  try {
+    const key = await deriveKey(pw);
+    const data = await decrypt(key);
+    if ($("rem").checked) store(false, ub64(await crypto.subtle.exportKey("raw", key)));
+    start(data, true);
+  } catch (err) {
+    $("err").textContent = "Неверный пароль";
+    const c = document.querySelector(".lockcard"); c.classList.remove("shake"); void c.offsetWidth; c.classList.add("shake");
+    $("pw").select();
+    $("go").disabled = false; $("go").textContent = "Открыть";
+  }
+};
+$("logout").onclick = () => { store(false, null); location.hash = ""; location.reload(); };
+
+// ---------- данные и состояние ----------
+let DATA, state = {tab: "all", q: "", project: "*", onlyNew: false, showBlock: false, missing: false};
+const norm = s => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/[\s\-‑–—.,«»"'()\/]+/g, " ").trim();
+const esc = s => String(s || "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+function hl(text, q) {
+  const raw = String(text || "");
+  if (!q) return esc(raw);
+  const i = raw.toLowerCase().replace(/ё/g, "е").indexOf(q);
+  if (i < 0) return esc(raw);
+  return esc(raw.slice(0, i)) + "<mark>" + esc(raw.slice(i, i + q.length)) + "</mark>" + esc(raw.slice(i + q.length));
+}
+
+function start(data, animate) {
+  DATA = data;
+  DATA.terms.forEach(t => {
+    t._hay = norm([t.id, t.ru, t.en, t.def, t.ex, Object.values(t.tr || {}).join(" "),
+      Object.values(t.variants || {}).map(v => v.map(x => x.text).join(" ")).join(" ")].join(" "));
+  });
+  const show = () => {
+    $("lock").classList.add("hidden");
+    $("app").classList.remove("hidden");
+    $("upd").textContent = "обновлено " + DATA.updated;
+    buildTabs();
+    route();
+  };
+  if (animate) { document.body.classList.add("unlocked"); setTimeout(show, 420); } else show();
+}
+
+// ---------- вкладки и адреса: #/KA, #/all, #T-00102 ----------
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  let term = null;
+  if (h.startsWith("/")) {
+    const parts = h.slice(1).split("/");
+    const tab = (parts[0] || "all").toUpperCase();
+    state.tab = DATA.languages.includes(tab) ? tab : "all";
+    term = parts[1] || null;
+  } else if (h) { term = h; }
+  buildFilters();
+  render();
+  moveTab();
+  if (term) setTimeout(() => focusTerm(term), 80);
+}
+function go(tab) {
+  const h = "#/" + (tab === "all" ? "all" : tab);
+  if (location.hash === h) return;
+  const swap = () => { history.pushState(null, "", h); route(); window.scrollTo({top: 0}); };
+  if (document.startViewTransition) document.startViewTransition(swap); else swap();
+}
+window.addEventListener("hashchange", route);
+
+function stats(lang) {
+  const terms = DATA.terms.filter(t => t.project !== BLOCK);
+  const done = terms.filter(t => (t.tr || {})[lang]).length;
+  return {done, total: terms.length, pct: terms.length ? Math.round(done * 100 / terms.length) : 0};
+}
+
+function buildTabs() {
+  const nav = $("tabs");
+  nav.querySelectorAll(".tab").forEach(b => b.remove());
+  const add = (id, label, extra) => {
+    const b = document.createElement("button");
+    b.className = "tab"; b.dataset.tab = id;
+    b.innerHTML = esc(label) + (extra ? "<small>" + esc(extra) + "</small>" : "");
+    b.onclick = () => go(id);
+    nav.appendChild(b);
+  };
+  add("all", "Все языки", String(DATA.terms.filter(t => t.project !== BLOCK).length));
+  DATA.languages.forEach(l => add(l, l, stats(l).pct + "%"));
+}
+function moveTab() {
+  const nav = $("tabs"), pill = $("pill");
+  nav.querySelectorAll(".tab").forEach(b => b.classList.toggle("on", b.dataset.tab === state.tab));
+  const on = nav.querySelector(".tab.on");
+  if (!on) return;
+  pill.style.left = on.offsetLeft + "px";
+  pill.style.width = on.offsetWidth + "px";
+  on.scrollIntoView({block: "nearest", inline: "center", behavior: "smooth"});
+}
+window.addEventListener("resize", moveTab);
+
+function buildFilters() {
+  const f = $("filters"); f.innerHTML = "";
+  const projects = [...new Set(DATA.terms.map(t => t.project).filter(p => p && p !== BLOCK))].sort();
+  const sel = document.createElement("select");
+  sel.className = "chip";
+  sel.innerHTML = '<option value="*">Все проекты</option><option value="">Общий глоссарий</option>' +
+    projects.map(p => '<option>' + esc(p) + '</option>').join("");
+  sel.value = state.project;
+  sel.onchange = () => { state.project = sel.value; render(); };
+  f.appendChild(sel);
+  const toggles = [["onlyNew", "✨ Новые и изменённые"], ["showBlock", "⛔ Блок-лист"]];
+  if (state.tab !== "all") toggles.unshift(["missing", "Без перевода"]);
+  toggles.forEach(([k, label]) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (state[k] ? " on" : "");
+    b.textContent = label;
+    b.onclick = () => { state[k] = !state[k]; b.classList.toggle("on"); render(); };
+    f.appendChild(b);
+  });
+}
+
+function editLink(t) {
+  return t.link ? '<a class="edit" href="' + esc(t.link) + '" target="_blank" rel="noopener">✎ поправить в таблице</a>' : "";
+}
+
+function render() {
+  const q = norm(state.q), qq = String(state.q).toLowerCase().replace(/ё/g, "е").trim();
+  const lang = state.tab === "all" ? null : state.tab;
+
+  // шапка языка с прогрессом
+  const lh = $("langhead");
+  if (lang) {
+    const s = stats(lang);
+    lh.innerHTML = '<div class="langhead"><span class="code">' + lang + '</span><h2>' + esc(LANG_NAMES[lang] || lang) + '</h2>' +
+      '<div class="progress"><div class="bar"><i id="bar"></i></div><small>Переведено ' + s.done + ' из ' + s.total + ' (' + s.pct + '%)</small></div></div>';
+    requestAnimationFrame(() => requestAnimationFrame(() => { const b = $("bar"); if (b) b.style.width = s.pct + "%"; }));
+  } else lh.innerHTML = "";
+
+  const list = DATA.terms.filter(t => {
+    const bl = t.project === BLOCK;
+    if (bl && !state.showBlock && !q) return false;
+    if (state.project !== "*" && (t.project || "") !== state.project && !bl) return false;
+    if (state.onlyNew && !t.status) return false;
+    if (lang && state.missing && ((t.tr || {})[lang] || bl)) return false;
+    return !q || t._hay.includes(q);
+  }).sort((a, b) => {
+    if (q) {
+      const ea = norm(a.ru) === q || norm(a.en) === q, eb = norm(b.ru) === q || norm(b.en) === q;
+      if (ea !== eb) return ea ? -1 : 1;
+    }
+    return a.ru.localeCompare(b.ru, "ru");
+  });
+
+  $("count").textContent = list.length ? "Найдено: " + list.length : "";
+  const box = $("list");
+  if (!list.length) {
+    box.innerHTML = '<div class="emptyres"><b>🌴</b>Ничего не нашлось.<br>Попробуйте другое слово или предложите термин в Termbase.</div>';
+    return;
+  }
+  box.innerHTML = list.map((t, i) => {
+    const bl = t.project === BLOCK;
+    const delay = ' style="animation-delay:' + Math.min(i, 14) * 35 + 'ms"';
+    const badges = [
+      t.project && !bl ? '<span class="b">' + esc(t.project) + '</span>' : "",
+      bl ? '<span class="b bl">блок-лист</span>' : "",
+      t.status === "новый" ? '<span class="b new">новый</span>' : "",
+      t.status === "изменён" ? '<span class="b chg">изменён</span>' : "",
+      '<button class="idb" data-id="' + esc(t.id) + '" title="Скопировать ссылку на термин">' + esc(t.id) + '</button>'
+    ].join("");
+    const vars = l => ((t.variants || {})[l] || []).map(x => '<div class="var">⤷ <b>' + hl(x.text, qq) + '</b>' + (x.when ? " — " + esc(x.when) : "") + '</div>').join("");
+    const copyBtn = v => '<button class="cp" data-copy="' + esc(v) + '" title="Скопировать">⧉</button>';
+
+    if (lang) {
+      const v = (t.tr || {})[lang];
+      return '<article class="card' + (bl ? " block" : "") + '" id="' + esc(t.id) + '"' + delay + '><div class="row">' +
+        '<div class="src"><div class="head"><span class="ru">' + hl(t.ru, qq) + '</span><div class="badges">' + badges + '</div></div>' +
+        (t.en ? '<span class="en">' + hl(t.en, qq) + '</span>' : "") + (t.def ? '<p class="def">' + hl(t.def, qq) + '</p>' : "") + '</div>' +
+        '<div class="dst' + (v ? "" : " empty") + '"><div class="t">' + (bl ? "не используем" : v ? hl(v, qq) : "нет перевода") + '</div>' +
+        (v ? copyBtn(v) : "") + vars(lang) + editLink(t) + '</div></div></article>';
+    }
+    const grid = bl ? "" : '<div class="grid">' + DATA.languages.map(l => {
+      const v = (t.tr || {})[l];
+      return '<div class="tr' + (v ? "" : " empty") + '"><div class="l">' + l + '</div><div class="t">' + (v ? hl(v, qq) : "нет перевода") + '</div>' +
+        (v ? copyBtn(v) : "") + vars(l) + '</div>';
+    }).join("") + '</div>';
+    return '<article class="card' + (bl ? " block" : "") + '" id="' + esc(t.id) + '"' + delay + '>' +
+      '<div class="head"><span class="ru">' + hl(t.ru, qq) + '</span>' + (t.en ? '<span class="en">' + hl(t.en, qq) + '</span>' : "") +
+      '<div class="badges">' + badges + '</div></div>' +
+      (t.def ? '<p class="def">' + hl(t.def, qq) + '</p>' : "") + (t.ex ? '<p class="ex">' + esc(t.ex) + '</p>' : "") + grid + editLink(t) + '</article>';
+  }).join("");
+}
+
+// ---------- мелочи ----------
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 1600); }
+async function copy(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Скопировано ✓");
+    if (btn) { btn.classList.add("done"); btn.textContent = "✓"; setTimeout(() => { btn.classList.remove("done"); btn.textContent = "⧉"; }, 1200); }
+  } catch (e) { toast("Не получилось скопировать"); }
+}
+function focusTerm(id) {
+  let el = document.getElementById(id);
+  if (!el) { state.q = id; $("q").value = id; render(); el = document.getElementById(id); }
+  if (!el) return;
+  el.scrollIntoView({behavior: "smooth", block: "start"});
+  el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 2200);
+}
+$("q").oninput = e => { state.q = e.target.value; render(); };
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement !== $("q") && !$("app").classList.contains("hidden")) { e.preventDefault(); $("q").focus(); }
+  if (e.key === "Escape") sheet(false);
+});
+$("list").onclick = e => {
+  const c = e.target.closest("[data-copy]");
+  if (c) return copy(c.dataset.copy, c);
+  const id = e.target.closest("[data-id]");
+  if (id) {
+    const url = location.href.split("#")[0] + "#/" + (state.tab === "all" ? "all" : state.tab) + "/" + id.dataset.id;
+    copy(url);
+  }
+};
+window.addEventListener("scroll", () => $("totop").classList.toggle("show", scrollY > 600), {passive: true});
+$("totop").onclick = () => window.scrollTo({top: 0, behavior: "smooth"});
+
+function sheet(open) {
+  $("sheet").classList.toggle("show", open);
+  $("sheetbg").classList.toggle("show", open);
+  if (open && DATA && DATA.links) {
+    const L = DATA.links;
+    $("lnk-termbase").innerHTML = L.termbase ? '<a href="' + esc(L.termbase) + '" target="_blank" rel="noopener">Открыть Termbase ↗</a>' : "";
+    $("lnk-table").innerHTML = L.table ? '<a href="' + esc(L.table) + '" target="_blank" rel="noopener">Открыть таблицу ↗</a>' : "";
+  }
+}
+$("how").onclick = () => sheet(true);
+$("close").onclick = () => sheet(false);
+$("sheetbg").onclick = () => sheet(false);
+
+tryStored();
+</script>
+</body>
+</html>
