@@ -2,7 +2,12 @@
 // node build.js <пароль> <data.json> <куда положить index.html>
 const fs = require("fs"), crypto = require("crypto");
 const [pw, dataFile = "data.json", out = "index.html"] = process.argv.slice(2);
-if (!pw || pw.length < 10) { console.error("Пароль должен быть не короче 10 символов"); process.exit(1); }
+if (!pw) { console.error("Нужен пароль"); process.exit(1); }
+if (pw.length < 10) {
+  // Короткий пароль подбирается за минуты: годится только для демо-терминов.
+  if (!process.env.ALLOW_WEAK) { console.error("Пароль короче 10 символов. Для демо запустите с ALLOW_WEAK=1"); process.exit(1); }
+  console.warn("Внимание: короткий пароль — только для демо, не для настоящих терминов");
+}
 const data = JSON.parse(fs.readFileSync(dataFile, "utf8"));
 if (data.error || !Array.isArray(data.terms)) { console.error("В данных нет терминов: " + (data.error || "неизвестный ответ")); process.exit(1); }
 const iter = 600000;
