@@ -99,9 +99,6 @@ WRAP = Alignment(wrap_text=True, vertical='top')
 # --- Пуши и Баннеры: отдельные вкладки, колонки ищутся скриптом по названиям ---
 WIDTH = {'ID': 9, 'Дата': 11, 'Тип баннера': 12, 'Продукт': 13, 'Языки': 18, 'Лимит': 8, 'Дедлайн': 14,
          'Ссылка (тред / Figma)': 16, 'Контекст': 28, 'Текст RU': 50, 'Статус': 13, 'Уже переводили?': 32}
-INPUT_ROWS = 5
-INPUT_FILL = PatternFill('solid', fgColor='FFF8D6')
-from openpyxl.comments import Comment
 STATUS_COLORS = {'Новый': 'FFE7EF', 'Из архива': 'E2F6EC', 'Проверить': 'FFF4DC', 'У подрядчика': 'FFF2D9', 'Готово': 'ECE8FB', 'Отдан': 'EEEEEE', 'Отменён': 'F5F5F5'}
 
 def build_requests(ws, items, banner, tab):
@@ -114,12 +111,7 @@ def build_requests(ws, items, banner, tab):
         c.font = HEAD; c.fill = head_fill(c.value); c.alignment = Alignment(vertical='center', wrap_text=True)
     ws.row_dimensions[1].height = 34
     ws.sheet_properties.tabColor = tab
-    # Жёлтые строки под шапкой — для новых запросов; скрипт через пару минут опускает их в список (новые сверху).
-    for _ in range(INPUT_ROWS):
-        ws.append([None] * len(cols))
-        for c in ws[ws.max_row]: c.fill = INPUT_FILL
-    ws.cell(2, 1).comment = Comment('✏️ Новый запрос пишите в жёлтые строки. Через пару минут он сам уедет вниз — новые всегда сверху.', 'Переводы')
-    items = sorted(items, key=lambda x: (x['date'], x['id']), reverse=True)
+    items = sorted(items, key=lambda x: (x['date'], x['id']))
     for x in items:
         val = {'ID': x['id'], 'Дата': x['date'].date(), 'Тип баннера': x['btype'], 'Продукт': x['product'], 'Языки': ', '.join(x['langs']),
                'Лимит': x['limit'], 'Дедлайн': None, 'Ссылка (тред / Figma)': '', 'Контекст': x['ctx'], 'Текст RU': x['ru'],
@@ -127,7 +119,7 @@ def build_requests(ws, items, banner, tab):
         ws.append([val[c] if c in val else x['tr'].get(c, '') for c in cols])
     n = ws.max_row
     ci = {c: i for i, c in enumerate(cols)}
-    for row in ws.iter_rows(min_row=2 + INPUT_ROWS, max_row=n):
+    for row in ws.iter_rows(min_row=2, max_row=n):
         row[ci['Дата']].number_format = 'DD.MM.YYYY'
         row[ci['Дедлайн']].number_format = 'DD.MM.YYYY HH:MM'
         for c in row: c.alignment = WRAP; c.border = thin
@@ -183,7 +175,7 @@ hp.sheet_properties.tabColor = 'F2A33A'
 hp.column_dimensions['A'].width = 26; hp.column_dimensions['B'].width = 90
 help_rows = [
     ('Как заказать перевод', ''),
-    ('1. Новая строка', 'Пуш — на вкладке «📥 Пуши», баннер — на «🖼 Баннеры». Пишите в жёлтые строки сверху: через пару минут строка сама уедет вниз, новые всегда сверху. Один текст = одна строка (заголовок и текст пуша — две строки).'),
+    ('1. Новая строка', 'Пуш — на вкладке «📥 Пуши», баннер — на «🖼 Баннеры». Пишите в первую пустую строку внизу. Один текст = одна строка (заголовок и текст пуша — две строки).'),
     ('Тип баннера', 'Для баннера — из списка: Лайн, Саблайн, Плашка…'),
     ('Продукт', 'Из списка. Нет нужного — «Другое» и напишите в «Контекст».'),
     ('Языки', 'Через запятую: «казахский, узбекский» или коды «KK, UZ». «все» = KK, KY, UZ, HY, TG, KA.'),

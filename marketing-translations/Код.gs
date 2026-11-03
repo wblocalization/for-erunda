@@ -1,7 +1,6 @@
 /* ============================================================================
  * Переводы маркетинга: запросы на перевод пушей и баннеров.
- * Пуши — на «📥 Пуши», баннеры — на «🖼 Баннеры». Новый запрос пишут в жёлтые строки
- * сверху; через пару минут после последней правки строка сама уезжает вниз — новые всегда сверху.
+ * Пуши — на «📥 Пуши», баннеры — на «🖼 Баннеры». Новый запрос пишут в первую пустую строку внизу.
  * Скрипт:
  *  - ставит ID, дату и статус;
  *  - ищет текст в архиве и подставляет готовые переводы
@@ -20,9 +19,6 @@ const CFG = {
   ],
   ARC: '📚 Архив переводов',
   STATS: '📊 Статистика',
-  INPUT_ROWS: 5,          // жёлтые строки под шапкой (2…6) — для новых запросов
-  INPUT_BG: '#fff8d6',
-  IDLE_MIN: 2,            // через сколько минут после последней правки строка уезжает вниз
   LANGS: ['KK', 'KY', 'UZ', 'HY', 'TG', 'KA', 'AZ', 'EN'],
   ALL: ['KK', 'KY', 'UZ', 'HY', 'TG', 'KA'],            // что значит «все»
   LANG_WORDS: {
@@ -44,7 +40,6 @@ function onOpen() {
     .addItem('♻️ Проверить по архиву: выделенные строки', 'matchSelected')
     .addItem('♻️ Проверить по архиву: все новые', 'matchAllNew')
     .addItem('📥 Загрузить переводы из Smartcat…', 'showSmartcatDialog')
-    .addItem('⬇️ Опустить новые строки сейчас', 'flushInputNow')
     .addSeparator()
     .addItem('📤 Выделенные → «У подрядчика»', 'markVendor')
     .addItem('📨 Выделенные → «Отдан»', 'markSent')
@@ -90,8 +85,6 @@ function reqCols_(head, name) {
   });
   return out;
 }
-
-function inInput_(row) { return row >= 2 && row <= CFG.INPUT_ROWS + 1; }
 
 function selectedRows_(sh) {
   const rows = [];
@@ -190,7 +183,7 @@ function swapNumbers_(oldSrc, newSrc, tr) {
 
 /* ---------- архив: всё, что уже переводили ---------- */
 
-// Записи: { src: 'P-0123' | 'архив: <файл>', ru, tr: {KK: ...} }. Свежие — первыми (вкладки идут сверху вниз).
+// Записи: { src: 'P-0123' | 'архив: <файл>', ru, tr: {KK: ...} }.
 function loadArchive_(skip) {
   const list = [];
   reqSheets_().forEach(function (x) {
@@ -390,64 +383,6 @@ function existingIds_(sh, C) {
 }
 
 
-/* ---------- жёлтые строки: новые запросы уезжают вниз ---------- */
-
-function stampInput_(name, rows) {
-  const props = PropertiesService.getDocumentProperties();
-  const now = String(Date.now());
-  rows.forEach(function (r) { if (inInput_(r)) props.setProperty('edit|' + name + '|' + r, now); });
-}
-
-function flushInputNow() { flushInput_(true); }
-function flushInput() { flushInput_(false); }   // триггер раз в минуту
-
-// Заполненные жёлтые строки, которые не правили CFG.IDLE_MIN минут, переезжают под жёлтую зону — наверх списка.
-function flushInput_(force) {
-  const lock = LockService.getDocumentLock();
-  if (!lock.tryLock(20000)) return;
-  try {
-    const props = PropertiesService.getDocumentProperties();
-    const now = Date.now();
-    reqSheets_().forEach(function (x) {
-      const sh = x.sh, n = CFG.INPUT_ROWS;
-      const head = head_(sh), C = reqCols_(head, x.def.name);
-      const rng = sh.getRange(2, 1, n, head.length);
-      const vals = rng.getValues(), bgs = rng.getBackgrounds(), notes = rng.getNotes();
-      const go = [];
-      vals.forEach(function (v, i) {
-        if (!String(v[C.ru] || '').trim()) return;
-        const t = Number(props.getProperty('edit|' + x.def.name + '|' + (i + 2)) || 0);
-        if (force || now - t >= CFG.IDLE_MIN * 60000) go.push(i);
-      });
-      if (!go.length) return;
-      // Для строк, которые ещё не проверялись (вставлены без правки), — проверка по архиву.
-      const fresh = go.filter(function (i) { return !String(vals[i][C.id]).trim(); }).map(function (i) { return i + 2; });
-      if (fresh.length) {
-        matchRows_(sh, fresh, false);
-        const again = rng.getValues(), againBg = rng.getBackgrounds(), againNotes = rng.getNotes();
-        fresh.forEach(function (r) { vals[r - 2] = again[r - 2]; bgs[r - 2] = againBg[r - 2]; notes[r - 2] = againNotes[r - 2]; });
-      }
-      const top = n + 2;
-      sh.insertRowsBefore(top, go.length);
-      const dest = sh.getRange(top, 1, go.length, head.length);
-      dest.setValues(go.map(function (i) { return vals[i]; }));
-      dest.setBackgrounds(go.map(function (i) { return bgs[i].map(function (b) { return b === CFG.INPUT_BG ? '#ffffff' : b; }); }));
-      dest.setNotes(go.map(function (i) { return notes[i]; }));
-      dest.setFontWeight('normal');
-      go.forEach(function (i) {
-        const row = sh.getRange(i + 2, 1, 1, head.length);
-        row.clearContent();
-        row.clearNote();
-        row.setBackground(CFG.INPUT_BG);
-        props.deleteProperty('edit|' + x.def.name + '|' + (i + 2));
-      });
-      sh.autoResizeRows(top, go.length);
-    });
-  } finally {
-    lock.releaseLock();
-  }
-}
-
 /* ---------- правки на листе (триггер ставит «Настроить таблицу») ---------- */
 
 function onRequestEdit(e) {
@@ -463,7 +398,6 @@ function onRequestEdit(e) {
   try {
     const rows = [];
     for (let r = Math.max(2, e.range.getRow()); r <= e.range.getLastRow(); r++) rows.push(r);
-    stampInput_(def.name, rows);
     if (touches(C.ru) || touches(C.langs)) {
       matchRows_(sh, rows, false);
     } else if (touches(C.status) && /^(Готово|Отдан)$/.test(String(e.value || ''))) {
@@ -583,10 +517,10 @@ function smartcatImport(units, apply) {
       cand = t.byKey[kSpace_(u.src)] || t.byEmoji[kEmoji_(u.src)] || [];
     }
     if (!cand.length) { item.status = 'строка не найдена'; report.push(item); return; }
-    // Самая свежая строка (новые сверху), где этот язык ещё пуст; иначе самая свежая.
+    // Самая свежая строка (новые внизу), где этот язык ещё пуст; иначе самая свежая.
     const C = t.C;
     const empty = cand.filter(function (i) { return !String(t.vals[i][C.lang[lang]]).trim(); });
-    const i = (empty.length ? empty : cand)[0];
+    const i = (empty.length ? empty : cand).slice(-1)[0];
     item.row = i + 2;
     item.id = t.vals[i][C.id];
     item.sheet = t.def.name;
@@ -683,7 +617,6 @@ function setup() {
     if (['onRequestEdit', 'buildStats', 'flushInput'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('onRequestEdit').forSpreadsheet(ss).onEdit().create();
-  ScriptApp.newTrigger('flushInput').timeBased().everyMinutes(1).create();
   ScriptApp.newTrigger('buildStats').timeBased().everyDays(1).atHour(7).create();
   reqSheets_().forEach(function (x) {
     const sh = x.sh, C = reqCols_(head_(sh), x.def.name);
