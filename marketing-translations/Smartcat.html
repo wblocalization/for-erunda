@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  body{margin:0;padding:16px 18px;font:13px/1.45 Arial,sans-serif;color:#241c33}
+  .drop{border:2px dashed #c9bfe0;border-radius:14px;padding:26px;text-align:center;cursor:pointer;transition:.2s;background:#faf8fe}
+  .drop.over{border-color:#e5638f;background:#fff1f6}
+  .drop b{font-size:15px}
+  .muted{color:#7c7190;font-size:12px}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}
+  th,td{text-align:left;padding:5px 6px;border-bottom:1px solid #eee;vertical-align:top}
+  th{color:#7c7190;font-weight:600;position:sticky;top:0;background:#fff}
+  .wrap{max-height:300px;overflow:auto;margin-top:6px}
+  .st{white-space:nowrap;border-radius:99px;padding:1px 8px;font-weight:700;font-size:11px}
+  .ok{background:#e2f6ec;color:#1f8a57}.warn{background:#fff4dc;color:#8a5d00}.bad{background:#ffe3ea;color:#c23f5a}.gray{background:#eee;color:#666}
+  .bar{display:flex;gap:8px;align-items:center;margin-top:12px}
+  button{border:0;border-radius:10px;padding:9px 16px;font:bold 13px Arial;cursor:pointer}
+  .p{background:linear-gradient(120deg,#ffb07a,#e5638f);color:#fff}.g{background:#f0eef5}
+  button:disabled{opacity:.5;cursor:default}
+  #msg{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="drop" id="drop"><b>Перетащите сюда zip из письма</b><br><span class="muted">или файлы .xliff — можно сразу несколько. Вложенные архивы распакуются сами.</span><br><br>
+  <button class="g" id="pick">Выбрать файлы</button><input type="file" id="file" multiple accept=".zip,.xliff,.xlf,.sdlxliff" hidden></div>
+<div id="out"></div>
+<div class="bar"><button class="p" id="apply" disabled>Вставить в таблицу</button><button class="g" onclick="google.script.host.close()">Закрыть</button><span id="msg" class="muted"></span></div>
+<script>
+let UNITS = [];
+const $ = id => document.getElementById(id);
+$('pick').onclick = e => { e.stopPropagation(); $('file').click(); };
+$('drop').onclick = () => $('file').click();
+$('file').onchange = e => read(e.target.files);
+['dragover', 'dragenter'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop', e => read(e.dataTransfer.files));
+
+// Достаёт из файлов все xliff, в том числе из zip внутри zip.
+async function collect(name, data, out) {
+  if (/\.zip$/i.test(name)) {
+    const zip = await JSZip.loadAsync(data);
+    for (const f of Object.values(zip.files)) {
+      if (f.dir) continue;
+      await collect(f.name.split('/').pop(), await f.async('uint8array'), out);
+    }
+  } else if (/\.(xliff|xlf|sdlxliff)$/i.test(name)) {
+    out.push({ name, text: new TextDecoder('utf-8').decode(data) });
+  }
+}
+
+function parse(file) {
+  const doc = new DOMParser().parseFromString(file.text, 'application/xml');
+  const units = [];
+  doc.querySelectorAll('file').forEach(f => {
+    const fromName = (file.name.match(/\(ru-RU-([^)]+)\)/) || [])[1];
+    const lang = f.getAttribute('target-language') || fromName || '';
+    f.querySelectorAll('trans-unit').forEach(u => {
+      const src = u.querySelector('source'), tgt = u.querySelector('target');
+      if (!src || !tgt || !tgt.textContent.trim()) return;
+      units.push({ file: file.name, lang, src: src.textContent, tgt: tgt.textContent, max: u.getAttribute('maxwidth') || '' });
+    });
+  });
+  return units;
+}
+
+async function read(list) {
+  $('msg').textContent = 'Читаю файлы…';
+  const files = [];
+  try {
+    for (const f of list) await collect(f.name, new Uint8Array(await f.arrayBuffer()), files);
+  } catch (err) { $('msg').textContent = 'Не получилось распаковать: ' + err.message; return; }
+  UNITS = files.flatMap(parse);
+  if (!UNITS.length) { $('msg').textContent = 'В файлах не нашлось переводов.'; return; }
+  $('msg').textContent = 'Файлов: ' + files.length + ', переводов: ' + UNITS.length + '. Ищу строки…';
+  google.script.run.withSuccessHandler(show).withFailureHandler(fail).smartcatImport(UNITS, false);
+}
+
+const CLS = { 'встанет': 'ok', 'вставлено': 'ok', 'уже стоит': 'gray', 'уже есть другой перевод': 'warn', 'строка не найдена': 'bad', 'язык не найден': 'bad' };
+function show(report) {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const ready = report.filter(r => r.status === 'встанет').length;
+  const done = report.filter(r => r.status === 'вставлено').length;
+  $('out').innerHTML = '<div class="wrap"><table><tr><th>Строка</th><th>Язык</th><th>Текст RU</th><th>Перевод</th><th></th></tr>' +
+    report.map(r => '<tr><td>' + esc(r.id || '—') + '</td><td>' + esc(r.lang) + '</td><td>' + esc(r.src).slice(0, 90) + '</td><td>' + esc(r.tgt).slice(0, 90) +
+      (r.over ? '<br><span class="st bad">длиннее лимита ' + esc(r.over) + '</span>' : '') +
+      '</td><td><span class="st ' + (CLS[r.status] || 'gray') + '">' + esc(r.status) + '</span></td></tr>').join('') + '</table></div>';
+  $('apply').disabled = !ready;
+  $('msg').textContent = done ? 'Вставлено: ' + done + '. Строки, где переведены все языки, получили статус «Готово».' :
+    ready ? 'Встанет: ' + ready + ' из ' + report.length + '. Уже заполненные ячейки не трогаю.' : 'Вставлять нечего.';
+}
+function fail(e) { $('msg').textContent = 'Ошибка: ' + e.message; $('apply').disabled = false; }
+$('apply').onclick = () => {
+  $('apply').disabled = true; $('msg').textContent = 'Вставляю…';
+  google.script.run.withSuccessHandler(show).withFailureHandler(fail).smartcatImport(UNITS, true);
+};
+</script>
+</body>
+</html>
