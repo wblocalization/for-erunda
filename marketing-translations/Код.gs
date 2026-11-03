@@ -43,6 +43,7 @@ function onOpen() {
     .addItem('📚 Пополнить архив готовыми', 'archiveDone')
     .addItem('📊 Обновить статистику', 'buildStats')
     .addSeparator()
+    .addItem('🎨 Оформить таблицу', 'styleTable')
     .addItem('🔑 Ключ для расширения', 'showToken')
     .addItem('⚙️ Настроить таблицу (владелец)', 'setup')
     .addToUi();
@@ -582,6 +583,35 @@ function buildStats() {
   st.autoResizeColumns(1, 13);
 }
 
+/* ---------- оформление ---------- */
+
+// Цвет шапки каждой колонки языка — чтобы глаз сразу находил свой язык.
+const LANG_COLORS = { KK: '#1f8a8a', KY: '#c0392b', UZ: '#2a78d6', HY: '#d9822b', TG: '#2e8b57', KA: '#b0306a', AZ: '#5b4bc4', EN: '#5f6b7a' };
+const TAB_COLORS = { '📥 Запросы': '#e5638f', '📚 Архив переводов': '#2a78d6', '📊 Статистика': '#2e8b57', '📖 Как заполнять': '#f2a33a', '⚙️ Справочники': '#8a8a8a' };
+
+// Ширины колонок, перенос текста целиком, высота строк по тексту, цветные шапки и вкладки.
+function styleTable() {
+  const ss = SpreadsheetApp.getActive();
+  Object.keys(TAB_COLORS).forEach(function (n) { const sh = ss.getSheetByName(n); if (sh) sh.setTabColor(TAB_COLORS[n]); });
+  [CFG.REQ, CFG.ARC].forEach(function (name) {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+    const head = head_(sh), last = Math.max(sh.getLastRow(), 2);
+    const widths = { 'ID': 80, 'Источник': 170, 'Дата': 95, 'Тип': 90, 'Тип баннера': 110, 'Продукт': 120, 'Языки': 150, 'Лимит': 70,
+      'Дедлайн': 120, 'Ссылка (тред / Figma)': 150, 'Контекст': 220, 'Текст RU': 360, 'Статус': 120, 'Уже переводили?': 260 };
+    head.forEach(function (h, i) {
+      sh.setColumnWidth(i + 1, widths[h] || (CFG.LANGS.indexOf(h) !== -1 ? 300 : 120));
+      const cell = sh.getRange(1, i + 1);
+      const color = LANG_COLORS[h] || (['Текст RU', 'Статус', 'Уже переводили?'].indexOf(h) !== -1 ? '#c2477a' : '#2e2566');
+      cell.setBackground(color).setFontColor('#ffffff').setFontWeight('bold').setVerticalAlignment('middle').setWrap(true);
+    });
+    sh.setRowHeight(1, 40);
+    sh.getRange(2, 1, last - 1, head.length).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP).setVerticalAlignment('top');
+    sh.autoResizeRows(2, last - 1);
+  });
+  ss.toast('Готово: текст переносится целиком, шапки и вкладки цветные.', 'Оформление', 6);
+}
+
 /* ---------- настройка ---------- */
 
 function setup() {
@@ -598,6 +628,7 @@ function setup() {
     sh.getRange(1, c + 1, sh.getMaxRows(), 1).protect().setDescription('Переводы: заполняется автоматически').setWarningOnly(true);
   });
   token_();
+  styleTable();
   buildStats();
   SpreadsheetApp.getUi().alert('Готово: триггеры поставлены, статистика построена.\nКлюч для расширения — меню «🌍 Переводы» → «🔑 Ключ для расширения».');
 }
