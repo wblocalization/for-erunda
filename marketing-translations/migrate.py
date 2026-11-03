@@ -68,6 +68,27 @@ for x in rows:
     x['status'] = 'Отдан'
     x['note'] = ('⚠️ при переносе не было перевода: ' + ', '.join(miss)) if miss else ''
 
+LANG_COLORS = {'KK': '1F8A8A', 'KY': 'C0392B', 'UZ': '2A78D6', 'HY': 'D9822B', 'TG': '2E8B57', 'KA': 'B0306A', 'AZ': '5B4BC4', 'EN': '5F6B7A'}
+ACCENT = PatternFill('solid', fgColor='C2477A')
+MAIN_COLS = ('Текст RU', 'Статус', 'Уже переводили?')
+import math
+
+def head_fill(name):
+    if name in LANG_COLORS: return PatternFill('solid', fgColor=LANG_COLORS[name])
+    if name in MAIN_COLS: return ACCENT
+    return HFILL
+
+def fit_rows(ws, widths):
+    # Высота строки по самому длинному тексту: ширина колонки в символах ≈ сколько букв влезает в строку.
+    for row in ws.iter_rows(min_row=2):
+        lines = 1
+        for c in row:
+            if c.value is None: continue
+            w = max(widths[c.column - 1] * 1.05, 4)
+            n = sum(max(1, math.ceil(len(part) / w)) for part in str(c.value).split('\n'))
+            lines = max(lines, n)
+        ws.row_dimensions[row[0].row].height = min(15 * lines + 6, 400)
+
 wb = openpyxl.Workbook()
 HEAD = Font(bold=True, color='FFFFFF')
 HFILL = PatternFill('solid', fgColor='2E2566')
@@ -79,12 +100,13 @@ WRAP = Alignment(wrap_text=True, vertical='top')
 ws = wb.active; ws.title = '📥 Запросы'
 cols = ['ID', 'Дата', 'Тип', 'Тип баннера', 'Продукт', 'Языки', 'Лимит', 'Дедлайн', 'Ссылка (тред / Figma)',
         'Контекст', 'Текст RU', 'Статус', 'Уже переводили?'] + LANGS
-widths = [9, 11, 10, 13, 14, 16, 7, 14, 18, 24, 42, 13, 30] + [30] * len(LANGS)
+widths = [9, 11, 9, 12, 13, 18, 8, 14, 16, 28, 50, 13, 32] + [42] * len(LANGS)
 ws.append(cols)
 for i, w in enumerate(widths, 1): ws.column_dimensions[L(i)].width = w
 for c in ws[1]:
-    c.font = HEAD; c.fill = LFILL if c.value in LANGS else HFILL; c.alignment = Alignment(vertical='center', wrap_text=True)
-ws.row_dimensions[1].height = 30
+    c.font = HEAD; c.fill = head_fill(c.value); c.alignment = Alignment(vertical='center', wrap_text=True)
+ws.row_dimensions[1].height = 34
+ws.sheet_properties.tabColor = 'E5638F'
 for x in rows:
     ws.append([x['id'], x['date'].date(), x['type'], x['btype'], x['product'], ', '.join(x['langs']), x['limit'], None, '',
                x['ctx'], x['ru'], x['status'], x['note']] + [x['tr'].get(c, '') for c in LANGS])
@@ -94,6 +116,7 @@ for row in ws.iter_rows(min_row=2, max_row=n):
     row[7].number_format = 'DD.MM.YYYY HH:MM'
     for c in row: c.alignment = WRAP; c.border = thin
 ws.freeze_panes = 'B2'
+fit_rows(ws, widths)
 ws.auto_filter.ref = 'A1:%s%d' % (L(len(cols)), n)
 big = n + 2000
 def dv(col, items, title):
@@ -108,8 +131,11 @@ for st, color in STATUS_COLORS.items():
 # --- Архив ---
 wa = wb.create_sheet('📚 Архив переводов')
 wa.append(['Источник', 'Дата', 'Тип', 'Текст RU'] + LANGS)
-for i, w in enumerate([22, 11, 9, 42] + [30] * len(LANGS), 1): wa.column_dimensions[L(i)].width = w
-for c in wa[1]: c.font = HEAD; c.fill = LFILL if c.value in LANGS else HFILL
+awidths = [22, 11, 9, 50] + [42] * len(LANGS)
+for i, w in enumerate(awidths, 1): wa.column_dimensions[L(i)].width = w
+for c in wa[1]: c.font = HEAD; c.fill = head_fill(c.value); c.alignment = Alignment(vertical='center', wrap_text=True)
+wa.row_dimensions[1].height = 34
+wa.sheet_properties.tabColor = '2A78D6'
 srcname = ''
 for r in R.iter_rows(min_row=2, values_only=True):
     if s(r[0]): srcname = s(r[0])
@@ -121,14 +147,17 @@ for r in R.iter_rows(min_row=2, values_only=True):
 for row in wa.iter_rows(min_row=2):
     for c in row: c.alignment = WRAP
 wa.freeze_panes = 'E2'
+fit_rows(wa, awidths)
 
 # --- Статистика ---
 st = wb.create_sheet('📊 Статистика')
+st.sheet_properties.tabColor = '2E8B57'
 st['A1'] = 'Статистика появится после настройки: меню «🌍 Переводы» → «Обновить статистику».'
 st['A1'].font = Font(bold=True, size=13)
 
 # --- Как заполнять ---
 hp = wb.create_sheet('📖 Как заполнять')
+hp.sheet_properties.tabColor = 'F2A33A'
 hp.column_dimensions['A'].width = 26; hp.column_dimensions['B'].width = 90
 help_rows = [
     ('Как заказать перевод', ''),
@@ -157,6 +186,7 @@ for r in (1, 12): hp.cell(r, 1).font = Font(bold=True, size=13, color='2E2566')
 
 # --- Справочники ---
 dc = wb.create_sheet('⚙️ Справочники')
+dc.sheet_properties.tabColor = '8A8A8A'
 dc.append(['Продукты', 'Тип', 'Тип баннера', 'Статус', 'Язык (код)', 'Как пишут'])
 syn = {'KK': 'казахский, KK-CYR', 'KY': 'кыргызский, киргизский', 'UZ': 'узбекский, uz-Latn', 'HY': 'армянский', 'TG': 'таджикский', 'KA': 'грузинский', 'AZ': 'азербайджанский', 'EN': 'английский'}
 for i in range(max(len(PRODUCTS), len(TYPES), len(BTYPES), len(STATUSES), len(LANGS))):
