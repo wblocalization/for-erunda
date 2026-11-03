@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Переводы маркетинга",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Уведомления о новых запросах на перевод, подсказки из архива и загрузка переводов из Smartcat в таблицу.",
   "permissions": ["storage", "alarms", "notifications"],
   "host_permissions": ["https://script.google.com/*", "https://script.googleusercontent.com/*"],

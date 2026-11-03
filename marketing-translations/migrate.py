@@ -96,37 +96,59 @@ LFILL = PatternFill('solid', fgColor='4A3A8C')
 thin = Border(bottom=Side(style='thin', color='E6E3EF'))
 WRAP = Alignment(wrap_text=True, vertical='top')
 
-# --- Запросы ---
-ws = wb.active; ws.title = '📥 Запросы'
-cols = ['ID', 'Дата', 'Тип', 'Тип баннера', 'Продукт', 'Языки', 'Лимит', 'Дедлайн', 'Ссылка (тред / Figma)',
-        'Контекст', 'Текст RU', 'Статус', 'Уже переводили?'] + LANGS
-widths = [9, 11, 9, 12, 13, 18, 8, 14, 16, 28, 50, 13, 32] + [42] * len(LANGS)
-ws.append(cols)
-for i, w in enumerate(widths, 1): ws.column_dimensions[L(i)].width = w
-for c in ws[1]:
-    c.font = HEAD; c.fill = head_fill(c.value); c.alignment = Alignment(vertical='center', wrap_text=True)
-ws.row_dimensions[1].height = 34
-ws.sheet_properties.tabColor = 'E5638F'
-for x in rows:
-    ws.append([x['id'], x['date'].date(), x['type'], x['btype'], x['product'], ', '.join(x['langs']), x['limit'], None, '',
-               x['ctx'], x['ru'], x['status'], x['note']] + [x['tr'].get(c, '') for c in LANGS])
-n = ws.max_row
-for row in ws.iter_rows(min_row=2, max_row=n):
-    row[1].number_format = 'DD.MM.YYYY'
-    row[7].number_format = 'DD.MM.YYYY HH:MM'
-    for c in row: c.alignment = WRAP; c.border = thin
-ws.freeze_panes = 'B2'
-fit_rows(ws, widths)
-ws.auto_filter.ref = 'A1:%s%d' % (L(len(cols)), n)
-big = n + 2000
-def dv(col, items, title):
-    v = DataValidation(type='list', formula1='"' + ','.join(items) + '"', allow_blank=True, errorStyle='warning',
-                       showErrorMessage=True, errorTitle=title, error='Выберите значение из списка')
-    ws.add_data_validation(v); v.add('%s2:%s%d' % (col, col, big))
-dv('C', TYPES, 'Тип'); dv('D', BTYPES, 'Тип баннера'); dv('E', PRODUCTS, 'Продукт'); dv('L', STATUSES, 'Статус')
+# --- Пуши и Баннеры: отдельные вкладки, колонки ищутся скриптом по названиям ---
+WIDTH = {'ID': 9, 'Дата': 11, 'Тип баннера': 12, 'Продукт': 13, 'Языки': 18, 'Лимит': 8, 'Дедлайн': 14,
+         'Ссылка (тред / Figma)': 16, 'Контекст': 28, 'Текст RU': 50, 'Статус': 13, 'Уже переводили?': 32}
+INPUT_ROWS = 5
+INPUT_FILL = PatternFill('solid', fgColor='FFF8D6')
+from openpyxl.comments import Comment
 STATUS_COLORS = {'Новый': 'FFE7EF', 'Из архива': 'E2F6EC', 'Проверить': 'FFF4DC', 'У подрядчика': 'FFF2D9', 'Готово': 'ECE8FB', 'Отдан': 'EEEEEE', 'Отменён': 'F5F5F5'}
-for st, color in STATUS_COLORS.items():
-    ws.conditional_formatting.add('L2:L%d' % big, FormulaRule(formula=['$L2="%s"' % st], fill=PatternFill('solid', bgColor=color)))
+
+def build_requests(ws, items, banner, tab):
+    cols = ['ID', 'Дата'] + (['Тип баннера'] if banner else []) + ['Продукт', 'Языки', 'Лимит', 'Дедлайн',
+            'Ссылка (тред / Figma)', 'Контекст', 'Текст RU', 'Статус', 'Уже переводили?'] + LANGS
+    widths = [WIDTH.get(c, 42) for c in cols]
+    ws.append(cols)
+    for i, w in enumerate(widths, 1): ws.column_dimensions[L(i)].width = w
+    for c in ws[1]:
+        c.font = HEAD; c.fill = head_fill(c.value); c.alignment = Alignment(vertical='center', wrap_text=True)
+    ws.row_dimensions[1].height = 34
+    ws.sheet_properties.tabColor = tab
+    # Жёлтые строки под шапкой — для новых запросов; скрипт через пару минут опускает их в список (новые сверху).
+    for _ in range(INPUT_ROWS):
+        ws.append([None] * len(cols))
+        for c in ws[ws.max_row]: c.fill = INPUT_FILL
+    ws.cell(2, 1).comment = Comment('✏️ Новый запрос пишите в жёлтые строки. Через пару минут он сам уедет вниз — новые всегда сверху.', 'Переводы')
+    items = sorted(items, key=lambda x: (x['date'], x['id']), reverse=True)
+    for x in items:
+        val = {'ID': x['id'], 'Дата': x['date'].date(), 'Тип баннера': x['btype'], 'Продукт': x['product'], 'Языки': ', '.join(x['langs']),
+               'Лимит': x['limit'], 'Дедлайн': None, 'Ссылка (тред / Figma)': '', 'Контекст': x['ctx'], 'Текст RU': x['ru'],
+               'Статус': x['status'], 'Уже переводили?': x['note']}
+        ws.append([val[c] if c in val else x['tr'].get(c, '') for c in cols])
+    n = ws.max_row
+    ci = {c: i for i, c in enumerate(cols)}
+    for row in ws.iter_rows(min_row=2 + INPUT_ROWS, max_row=n):
+        row[ci['Дата']].number_format = 'DD.MM.YYYY'
+        row[ci['Дедлайн']].number_format = 'DD.MM.YYYY HH:MM'
+        for c in row: c.alignment = WRAP; c.border = thin
+    ws.freeze_panes = 'B2'
+    fit_rows(ws, widths)
+    ws.auto_filter.ref = 'A1:%s%d' % (L(len(cols)), n)
+    big = n + 2000
+    def dv(name, items_, title):
+        col = L(ci[name] + 1)
+        v = DataValidation(type='list', formula1='"' + ','.join(items_) + '"', allow_blank=True, errorStyle='warning',
+                           showErrorMessage=True, errorTitle=title, error='Выберите значение из списка')
+        ws.add_data_validation(v); v.add('%s2:%s%d' % (col, col, big))
+    if banner: dv('Тип баннера', BTYPES, 'Тип баннера')
+    dv('Продукт', PRODUCTS, 'Продукт'); dv('Статус', STATUSES, 'Статус')
+    sc = L(ci['Статус'] + 1)
+    for st, color in STATUS_COLORS.items():
+        ws.conditional_formatting.add('%s2:%s%d' % (sc, sc, big), FormulaRule(formula=['$%s2="%s"' % (sc, st)], fill=PatternFill('solid', bgColor=color)))
+
+ws = wb.active; ws.title = '📥 Пуши'
+build_requests(ws, [x for x in rows if x['type'] == 'Пуш'], False, 'E5638F')
+build_requests(wb.create_sheet('🖼 Баннеры'), [x for x in rows if x['type'] == 'Баннер'], True, 'F28A5B')
 
 # --- Архив ---
 wa = wb.create_sheet('📚 Архив переводов')
@@ -161,8 +183,8 @@ hp.sheet_properties.tabColor = 'F2A33A'
 hp.column_dimensions['A'].width = 26; hp.column_dimensions['B'].width = 90
 help_rows = [
     ('Как заказать перевод', ''),
-    ('1. Новая строка', 'Заполните строку внизу листа «📥 Запросы». Один текст = одна строка (заголовок и текст пуша — две строки).'),
-    ('Тип', 'Пуш, Баннер, Имейл… — из списка. Для баннера выберите ещё «Тип баннера».'),
+    ('1. Новая строка', 'Пуш — на вкладке «📥 Пуши», баннер — на «🖼 Баннеры». Пишите в жёлтые строки сверху: через пару минут строка сама уедет вниз, новые всегда сверху. Один текст = одна строка (заголовок и текст пуша — две строки).'),
+    ('Тип баннера', 'Для баннера — из списка: Лайн, Саблайн, Плашка…'),
     ('Продукт', 'Из списка. Нет нужного — «Другое» и напишите в «Контекст».'),
     ('Языки', 'Через запятую: «казахский, узбекский» или коды «KK, UZ». «все» = KK, KY, UZ, HY, TG, KA.'),
     ('Лимит', 'Сколько символов максимум (для пушей и кнопок).'),
@@ -187,11 +209,11 @@ for r in (1, 12): hp.cell(r, 1).font = Font(bold=True, size=13, color='2E2566')
 # --- Справочники ---
 dc = wb.create_sheet('⚙️ Справочники')
 dc.sheet_properties.tabColor = '8A8A8A'
-dc.append(['Продукты', 'Тип', 'Тип баннера', 'Статус', 'Язык (код)', 'Как пишут'])
+dc.append(['Продукты', 'Тип баннера', 'Статус', 'Язык (код)', 'Как пишут'])
 syn = {'KK': 'казахский, KK-CYR', 'KY': 'кыргызский, киргизский', 'UZ': 'узбекский, uz-Latn', 'HY': 'армянский', 'TG': 'таджикский', 'KA': 'грузинский', 'AZ': 'азербайджанский', 'EN': 'английский'}
-for i in range(max(len(PRODUCTS), len(TYPES), len(BTYPES), len(STATUSES), len(LANGS))):
+for i in range(max(len(PRODUCTS), len(BTYPES), len(STATUSES), len(LANGS))):
     g = lambda lst: lst[i] if i < len(lst) else None
-    dc.append([g(PRODUCTS), g(TYPES), g(BTYPES), g(STATUSES), g(LANGS), syn.get(g(LANGS)) if g(LANGS) else None])
+    dc.append([g(PRODUCTS), g(BTYPES), g(STATUSES), g(LANGS), syn.get(g(LANGS)) if g(LANGS) else None])
 for c in dc[1]: c.font = HEAD; c.fill = HFILL
 for i in range(1, 7): dc.column_dimensions[L(i)].width = 22
 

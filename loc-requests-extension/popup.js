@@ -74,7 +74,7 @@ $('list').addEventListener('click', async e => {
   const b = e.target.closest('button[data-act]');
   if (!b) return;
   const act = b.dataset.act, x = DATA.items.find(i => i.id === b.dataset.id);
-  if (act === 'open') return chrome.tabs.create({ url: DATA.url + '&range=A' + x.row });
+  if (act === 'open') return chrome.tabs.create({ url: x.url || DATA.url });
   if (act === 'link') return chrome.tabs.create({ url: b.dataset.url });
   if (act === 'copy') {
     const want = x.langs.length ? x.langs : Object.keys(x.tr);

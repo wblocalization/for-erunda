@@ -1,9 +1,11 @@
 /* ============================================================================
  * Переводы маркетинга: запросы на перевод пушей и баннеров.
- * Маркетологи пишут строки на «📥 Запросы», скрипт:
+ * Пуши — на «📥 Пуши», баннеры — на «🖼 Баннеры». Новый запрос пишут в жёлтые строки
+ * сверху; через пару минут после последней правки строка сама уезжает вниз — новые всегда сверху.
+ * Скрипт:
  *  - ставит ID, дату и статус;
  *  - ищет текст в архиве и подставляет готовые переводы
- *    (точное совпадение / отличается эмодзи — зелёным, отличаются цифры — жёлтым);
+ *    (тот же текст / другой эмодзи — зелёным, другие цифры или знаки — жёлтым);
  *  - подсвечивает переводы длиннее лимита;
  *  - загружает переводы из Smartcat (zip / xliff) в нужные строки;
  *  - строит статистику;
@@ -12,9 +14,15 @@
  * ========================================================================== */
 
 const CFG = {
-  REQ: '📥 Запросы',
+  REQS: [
+    { name: '📥 Пуши', type: 'Пуш', prefix: 'P' },
+    { name: '🖼 Баннеры', type: 'Баннер', prefix: 'B' },
+  ],
   ARC: '📚 Архив переводов',
   STATS: '📊 Статистика',
+  INPUT_ROWS: 5,          // жёлтые строки под шапкой (2…6) — для новых запросов
+  INPUT_BG: '#fff8d6',
+  IDLE_MIN: 2,            // через сколько минут после последней правки строка уезжает вниз
   LANGS: ['KK', 'KY', 'UZ', 'HY', 'TG', 'KA', 'AZ', 'EN'],
   ALL: ['KK', 'KY', 'UZ', 'HY', 'TG', 'KA'],            // что значит «все»
   LANG_WORDS: {
@@ -26,7 +34,6 @@ const CFG = {
   YELLOW: '#fff4dc',  // из архива, но проверить (цифры, знаки)
   RED: '#ffd6e0',     // длиннее лимита
   FUZZY: 0.9,         // «почти такой же» — только подсказка, без подстановки
-  PREFIX: { 'Пуш': 'P', 'Баннер': 'B', 'Имейл': 'E', 'Исследование': 'R', 'Инструкция': 'I', 'Другое': 'X' },
   TOKEN_PROP: 'EXT_TOKEN',
 };
 
@@ -37,6 +44,7 @@ function onOpen() {
     .addItem('♻️ Проверить по архиву: выделенные строки', 'matchSelected')
     .addItem('♻️ Проверить по архиву: все новые', 'matchAllNew')
     .addItem('📥 Загрузить переводы из Smartcat…', 'showSmartcatDialog')
+    .addItem('⬇️ Опустить новые строки сейчас', 'flushInputNow')
     .addSeparator()
     .addItem('📤 Выделенные → «У подрядчика»', 'markVendor')
     .addItem('📨 Выделенные → «Отдан»', 'markSent')
@@ -56,23 +64,50 @@ function sheet_(name) {
   return sh;
 }
 
+function reqDef_(name) { return CFG.REQS.filter(function (d) { return d.name === name; })[0] || null; }
+
+// Вкладки с запросами, которые есть в таблице: [{def, sh}].
+function reqSheets_() {
+  const ss = SpreadsheetApp.getActive();
+  return CFG.REQS.map(function (d) { return { def: d, sh: ss.getSheetByName(d.name) }; }).filter(function (x) { return x.sh; });
+}
+
 function head_(sh) {
   return sh.getRange(1, 1, 1, sh.getLastColumn()).getDisplayValues()[0].map(function (h) { return String(h).trim(); });
 }
 
-// Индексы колонок «Запросов» по названиям (0-based).
-function reqCols_(head) {
+// Индексы колонок вкладки запросов по названиям (0-based).
+function reqCols_(head, name) {
   const c = function (h) { return head.indexOf(h); };
   const out = {
-    id: c('ID'), date: c('Дата'), type: c('Тип'), btype: c('Тип баннера'), product: c('Продукт'), langs: c('Языки'),
+    id: c('ID'), date: c('Дата'), btype: c('Тип баннера'), product: c('Продукт'), langs: c('Языки'),
     limit: c('Лимит'), deadline: c('Дедлайн'), link: c('Ссылка (тред / Figma)'), ctx: c('Контекст'),
     ru: c('Текст RU'), status: c('Статус'), match: c('Уже переводили?'), lang: {},
   };
   CFG.LANGS.forEach(function (l) { out.lang[l] = c(l); });
   ['id', 'ru', 'status', 'match'].forEach(function (k) {
-    if (out[k] === -1) throw new Error('На «' + CFG.REQ + '» нет колонки «' + { id: 'ID', ru: 'Текст RU', status: 'Статус', match: 'Уже переводили?' }[k] + '».');
+    if (out[k] === -1) throw new Error('На «' + (name || '?') + '» нет колонки «' + { id: 'ID', ru: 'Текст RU', status: 'Статус', match: 'Уже переводили?' }[k] + '».');
   });
   return out;
+}
+
+function inInput_(row) { return row >= 2 && row <= CFG.INPUT_ROWS + 1; }
+
+function selectedRows_(sh) {
+  const rows = [];
+  sh.getActiveRangeList().getRanges().forEach(function (r) {
+    for (let i = Math.max(2, r.getRow()); i <= r.getLastRow(); i++) if (rows.indexOf(i) === -1) rows.push(i);
+  });
+  return rows;
+}
+
+function activeReq_() {
+  const sh = SpreadsheetApp.getActiveSheet();
+  if (!reqDef_(sh.getName())) {
+    SpreadsheetApp.getUi().alert('Откройте вкладку «' + CFG.REQS.map(function (d) { return d.name; }).join('» или «') + '» и выделите строки.');
+    return null;
+  }
+  return sh;
 }
 
 function parseLangs_(v) {
@@ -90,6 +125,7 @@ function limitOf_(v) {
   const m = String(v || '').match(/\d+/);
   return m ? Number(m[0]) : 0;
 }
+
 
 /* ---------- нормализация текста для поиска совпадений ---------- */
 
@@ -151,37 +187,36 @@ function swapNumbers_(oldSrc, newSrc, tr) {
   return out;
 }
 
+
 /* ---------- архив: всё, что уже переводили ---------- */
 
-// Записи: { src: 'P-0123' | 'архив: <файл>', ru, tr: {KK: ...} }. Свежие — первыми.
-function loadArchive_(skipRow) {
+// Записи: { src: 'P-0123' | 'архив: <файл>', ru, tr: {KK: ...} }. Свежие — первыми (вкладки идут сверху вниз).
+function loadArchive_(skip) {
   const list = [];
-  const req = sheet_(CFG.REQ);
-  if (req.getLastRow() >= 2) {
-    const head = head_(req), C = reqCols_(head);
-    const vals = req.getRange(2, 1, req.getLastRow() - 1, head.length).getDisplayValues();
-    for (let i = vals.length - 1; i >= 0; i--) {
-      if (i + 2 === skipRow) continue;
-      const r = vals[i];
+  reqSheets_().forEach(function (x) {
+    const sh = x.sh;
+    if (sh.getLastRow() < 2) return;
+    const head = head_(sh), C = reqCols_(head, x.def.name);
+    const vals = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getDisplayValues();
+    vals.forEach(function (r, i) {
+      if (skip && skip.sheet === x.def.name && skip.row === i + 2) return;
       const st = r[C.status];
-      if (st !== CFG.ST.DONE && st !== CFG.ST.SENT && st !== CFG.ST.ARCHIVE) continue;
+      if (st !== CFG.ST.DONE && st !== CFG.ST.SENT && st !== CFG.ST.ARCHIVE) return;
       const tr = {};
       CFG.LANGS.forEach(function (l) { if (C.lang[l] !== -1 && String(r[C.lang[l]]).trim()) tr[l] = r[C.lang[l]]; });
       if (Object.keys(tr).length && String(r[C.ru]).trim()) list.push({ src: r[C.id], ru: r[C.ru], tr: tr });
-    }
-  }
-  const ss = SpreadsheetApp.getActive().getSheetByName(CFG.ARC);
-  if (ss && ss.getLastRow() >= 2) {
-    const head = head_(ss);
+    });
+  });
+  const arc = SpreadsheetApp.getActive().getSheetByName(CFG.ARC);
+  if (arc && arc.getLastRow() >= 2) {
+    const head = head_(arc);
     const ru = head.indexOf('Текст RU'), srcCol = head.indexOf('Источник');
-    const vals = ss.getRange(2, 1, ss.getLastRow() - 1, head.length).getDisplayValues();
-    for (let i = vals.length - 1; i >= 0; i--) {
-      const r = vals[i];
-      if (!String(r[ru]).trim()) continue;
+    arc.getRange(2, 1, arc.getLastRow() - 1, head.length).getDisplayValues().forEach(function (r) {
+      if (!String(r[ru]).trim()) return;
       const tr = {};
       CFG.LANGS.forEach(function (l) { const c = head.indexOf(l); if (c !== -1 && String(r[c]).trim()) tr[l] = r[c]; });
       if (Object.keys(tr).length) list.push({ src: 'архив' + (srcCol !== -1 && r[srcCol] ? ': ' + String(r[srcCol]).slice(0, 40) : ''), ru: r[ru], tr: tr });
-    }
+    });
   }
   list.forEach(function (x) { x.k1 = kSpace_(x.ru); x.k2 = kEmoji_(x.ru); x.k3 = kNum_(x.ru); });
   return list;
@@ -230,27 +265,28 @@ function findInArchive_(ru, langs, arc) {
 
 const LEVEL_WORDS = { exact: 'тот же текст', emoji: 'отличается только эмодзи', punct: 'отличаются знаки — проверь', num: 'отличаются цифры — проверь число' };
 
+
 /* ---------- проверка строк ---------- */
 
 function matchSelected() {
-  const sh = SpreadsheetApp.getActiveSheet();
-  if (sh.getName() !== CFG.REQ) { SpreadsheetApp.getUi().alert('Выделите строки на листе «' + CFG.REQ + '».'); return; }
-  const rows = [];
-  sh.getActiveRangeList().getRanges().forEach(function (r) {
-    for (let i = Math.max(2, r.getRow()); i <= r.getLastRow(); i++) rows.push(i);
-  });
-  const res = matchRows_(rows, true);
+  const sh = activeReq_();
+  if (!sh) return;
+  const res = matchRows_(sh, selectedRows_(sh), true);
   SpreadsheetApp.getActive().toast(summary_(res), 'Проверка по архиву', 8);
 }
 
 function matchAllNew() {
-  const sh = sheet_(CFG.REQ);
-  const head = head_(sh), C = reqCols_(head);
-  if (sh.getLastRow() < 2) return;
-  const st = sh.getRange(2, C.status + 1, sh.getLastRow() - 1, 1).getDisplayValues();
-  const rows = [];
-  st.forEach(function (v, i) { if (!v[0] || v[0] === CFG.ST.NEW) rows.push(i + 2); });
-  const res = matchRows_(rows, true);
+  const res = { rows: 0, filled: 0, check: 0, fuzzy: 0 };
+  reqSheets_().forEach(function (x) {
+    const sh = x.sh;
+    if (sh.getLastRow() < 2) return;
+    const C = reqCols_(head_(sh), x.def.name);
+    const st = sh.getRange(2, C.status + 1, sh.getLastRow() - 1, 1).getDisplayValues();
+    const rows = [];
+    st.forEach(function (v, i) { if (!v[0] || v[0] === CFG.ST.NEW) rows.push(i + 2); });
+    const r = matchRows_(sh, rows, true);
+    Object.keys(res).forEach(function (k) { res[k] += r[k]; });
+  });
   SpreadsheetApp.getActive().toast(summary_(res), 'Проверка по архиву', 8);
 }
 
@@ -259,12 +295,12 @@ function summary_(res) {
 }
 
 // Проверяет строки: ID/дата/статус, поиск в архиве, лимиты. Пустые переводы заполняет, заполненные не трогает.
-function matchRows_(rowNums, force) {
-  const sh = sheet_(CFG.REQ);
-  const head = head_(sh), C = reqCols_(head);
+function matchRows_(sh, rowNums, force) {
+  const def = reqDef_(sh.getName());
+  const head = head_(sh), C = reqCols_(head, def.name);
   const res = { rows: 0, filled: 0, check: 0, fuzzy: 0 };
   if (!rowNums.length) return res;
-  const arc = loadArchive_(rowNums.length === 1 ? rowNums[0] : 0);
+  const arc = loadArchive_(rowNums.length === 1 ? { sheet: def.name, row: rowNums[0] } : null);
   const ids = existingIds_(sh, C);
   const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
   rowNums.forEach(function (rn) {
@@ -275,9 +311,8 @@ function matchRows_(rowNums, force) {
     res.rows++;
     let changed = false;
     if (!String(v[C.id]).trim()) {
-      const pre = CFG.PREFIX[String(v[C.type]).trim()] || 'P';
-      ids[pre] = (ids[pre] || 0) + 1;
-      v[C.id] = pre + '-' + ('000' + ids[pre]).slice(-4);
+      ids[def.prefix] = (ids[def.prefix] || 0) + 1;
+      v[C.id] = def.prefix + '-' + ('000' + ids[def.prefix]).slice(-4);
       changed = true;
     }
     if (C.date !== -1 && !v[C.date]) { v[C.date] = new Date(Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd') + 'T00:00:00'); changed = true; }
@@ -354,13 +389,73 @@ function existingIds_(sh, C) {
   return out;
 }
 
+
+/* ---------- жёлтые строки: новые запросы уезжают вниз ---------- */
+
+function stampInput_(name, rows) {
+  const props = PropertiesService.getDocumentProperties();
+  const now = String(Date.now());
+  rows.forEach(function (r) { if (inInput_(r)) props.setProperty('edit|' + name + '|' + r, now); });
+}
+
+function flushInputNow() { flushInput_(true); }
+function flushInput() { flushInput_(false); }   // триггер раз в минуту
+
+// Заполненные жёлтые строки, которые не правили CFG.IDLE_MIN минут, переезжают под жёлтую зону — наверх списка.
+function flushInput_(force) {
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(20000)) return;
+  try {
+    const props = PropertiesService.getDocumentProperties();
+    const now = Date.now();
+    reqSheets_().forEach(function (x) {
+      const sh = x.sh, n = CFG.INPUT_ROWS;
+      const head = head_(sh), C = reqCols_(head, x.def.name);
+      const rng = sh.getRange(2, 1, n, head.length);
+      const vals = rng.getValues(), bgs = rng.getBackgrounds(), notes = rng.getNotes();
+      const go = [];
+      vals.forEach(function (v, i) {
+        if (!String(v[C.ru] || '').trim()) return;
+        const t = Number(props.getProperty('edit|' + x.def.name + '|' + (i + 2)) || 0);
+        if (force || now - t >= CFG.IDLE_MIN * 60000) go.push(i);
+      });
+      if (!go.length) return;
+      // Для строк, которые ещё не проверялись (вставлены без правки), — проверка по архиву.
+      const fresh = go.filter(function (i) { return !String(vals[i][C.id]).trim(); }).map(function (i) { return i + 2; });
+      if (fresh.length) {
+        matchRows_(sh, fresh, false);
+        const again = rng.getValues(), againBg = rng.getBackgrounds(), againNotes = rng.getNotes();
+        fresh.forEach(function (r) { vals[r - 2] = again[r - 2]; bgs[r - 2] = againBg[r - 2]; notes[r - 2] = againNotes[r - 2]; });
+      }
+      const top = n + 2;
+      sh.insertRowsBefore(top, go.length);
+      const dest = sh.getRange(top, 1, go.length, head.length);
+      dest.setValues(go.map(function (i) { return vals[i]; }));
+      dest.setBackgrounds(go.map(function (i) { return bgs[i].map(function (b) { return b === CFG.INPUT_BG ? '#ffffff' : b; }); }));
+      dest.setNotes(go.map(function (i) { return notes[i]; }));
+      dest.setFontWeight('normal');
+      go.forEach(function (i) {
+        const row = sh.getRange(i + 2, 1, 1, head.length);
+        row.clearContent();
+        row.clearNote();
+        row.setBackground(CFG.INPUT_BG);
+        props.deleteProperty('edit|' + x.def.name + '|' + (i + 2));
+      });
+      sh.autoResizeRows(top, go.length);
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /* ---------- правки на листе (триггер ставит «Настроить таблицу») ---------- */
 
 function onRequestEdit(e) {
   if (!e || !e.range) return;
   const sh = e.range.getSheet();
-  if (sh.getName() !== CFG.REQ || e.range.getLastRow() < 2) return;
-  const head = head_(sh), C = reqCols_(head);
+  const def = reqDef_(sh.getName());
+  if (!def || e.range.getLastRow() < 2) return;
+  const head = head_(sh), C = reqCols_(head, def.name);
   const first = e.range.getColumn() - 1, last = e.range.getLastColumn() - 1;
   const touches = function (c) { return c !== -1 && c >= first && c <= last; };
   const lock = LockService.getDocumentLock();
@@ -368,10 +463,11 @@ function onRequestEdit(e) {
   try {
     const rows = [];
     for (let r = Math.max(2, e.range.getRow()); r <= e.range.getLastRow(); r++) rows.push(r);
-    if (touches(C.ru) || touches(C.langs) || touches(C.type)) {
-      matchRows_(rows, false);
+    stampInput_(def.name, rows);
+    if (touches(C.ru) || touches(C.langs)) {
+      matchRows_(sh, rows, false);
     } else if (touches(C.status) && /^(Готово|Отдан)$/.test(String(e.value || ''))) {
-      archiveRows_(rows);
+      archiveRows_(sh, rows);
     } else {
       // Поправили перевод или лимит — перепроверяем длину.
       rows.forEach(function (rn) {
@@ -391,47 +487,35 @@ function markVendor() { setStatusSelected_(CFG.ST.VENDOR); }
 function markSent() { setStatusSelected_(CFG.ST.SENT); }
 
 function setStatusSelected_(status) {
-  const sh = SpreadsheetApp.getActiveSheet();
-  if (sh.getName() !== CFG.REQ) { SpreadsheetApp.getUi().alert('Выделите строки на листе «' + CFG.REQ + '».'); return; }
-  const C = reqCols_(head_(sh));
-  let n = 0;
-  sh.getActiveRangeList().getRanges().forEach(function (r) {
-    for (let i = Math.max(2, r.getRow()); i <= r.getLastRow(); i++) {
-      if (!String(sh.getRange(i, C.ru + 1).getValue()).trim()) continue;
-      sh.getRange(i, C.status + 1).setValue(status);
-      n++;
-    }
-  });
-  if (status === CFG.ST.SENT) archiveSelected_();
-  SpreadsheetApp.getActive().toast('Статус «' + status + '»: ' + n + ' строк.', 'Переводы', 5);
-}
-
-function archiveSelected_() {
-  const sh = SpreadsheetApp.getActiveSheet();
-  const rows = [];
-  sh.getActiveRangeList().getRanges().forEach(function (r) {
-    for (let i = Math.max(2, r.getRow()); i <= r.getLastRow(); i++) rows.push(i);
-  });
-  archiveRows_(rows);
+  const sh = activeReq_();
+  if (!sh) return;
+  const C = reqCols_(head_(sh), sh.getName());
+  const rows = selectedRows_(sh).filter(function (i) { return String(sh.getRange(i, C.ru + 1).getValue()).trim(); });
+  rows.forEach(function (i) { sh.getRange(i, C.status + 1).setValue(status); });
+  if (status === CFG.ST.SENT) archiveRows_(sh, rows);
+  SpreadsheetApp.getActive().toast('Статус «' + status + '»: ' + rows.length + ' строк.', 'Переводы', 5);
 }
 
 /* ---------- архив ---------- */
 
 // Готовые и отданные запросы, которых ещё нет в архиве, дописываются в «📚 Архив переводов».
 function archiveDone() {
-  const sh = sheet_(CFG.REQ);
-  const C = reqCols_(head_(sh));
-  if (sh.getLastRow() < 2) return;
-  const st = sh.getRange(2, C.status + 1, sh.getLastRow() - 1, 1).getDisplayValues();
-  const rows = [];
-  st.forEach(function (v, i) { if (v[0] === CFG.ST.DONE || v[0] === CFG.ST.SENT) rows.push(i + 2); });
-  const n = archiveRows_(rows);
+  let n = 0;
+  reqSheets_().forEach(function (x) {
+    const sh = x.sh;
+    if (sh.getLastRow() < 2) return;
+    const C = reqCols_(head_(sh), x.def.name);
+    const st = sh.getRange(2, C.status + 1, sh.getLastRow() - 1, 1).getDisplayValues();
+    const rows = [];
+    st.forEach(function (v, i) { if (v[0] === CFG.ST.DONE || v[0] === CFG.ST.SENT) rows.push(i + 2); });
+    n += archiveRows_(sh, rows);
+  });
   SpreadsheetApp.getActive().toast('В архив добавлено: ' + n + '.', 'Архив', 5);
 }
 
-function archiveRows_(rowNums) {
-  const sh = sheet_(CFG.REQ), arc = sheet_(CFG.ARC);
-  const head = head_(sh), C = reqCols_(head);
+function archiveRows_(sh, rowNums) {
+  const def = reqDef_(sh.getName()), arc = sheet_(CFG.ARC);
+  const head = head_(sh), C = reqCols_(head, def.name);
   const ah = head_(arc);
   const srcCol = ah.indexOf('Источник');
   const have = new Set();
@@ -446,7 +530,7 @@ function archiveRows_(rowNums) {
     const row = ah.map(function (h) {
       if (h === 'Источник') return id;
       if (h === 'Дата') return C.date !== -1 ? v[C.date] : '';
-      if (h === 'Тип') return C.type !== -1 ? v[C.type] : '';
+      if (h === 'Тип') return def.type;
       if (h === 'Текст RU') return v[C.ru];
       if (C.lang[h] !== undefined && C.lang[h] !== -1) return v[C.lang[h]];
       return '';
@@ -470,116 +554,125 @@ function showSmartcatDialog() {
 const SC_LANG = { kk: 'KK', ky: 'KY', uz: 'UZ', hy: 'HY', tg: 'TG', ka: 'KA', az: 'AZ', en: 'EN' };
 
 // units: [{file, lang: 'uz-Latn', src, tgt, max}]. apply=false — только показать, что куда встанет.
+// push_… ищется на вкладке пушей, banner_… — на вкладке баннеров (не нашлось — на другой).
 function smartcatImport(units, apply) {
-  const sh = sheet_(CFG.REQ);
-  const head = head_(sh), C = reqCols_(head);
-  const n = Math.max(sh.getLastRow() - 1, 0);
-  const vals = n ? sh.getRange(2, 1, n, head.length).getValues() : [];
-  const bgs = n ? sh.getRange(2, 1, n, head.length).getBackgrounds() : [];
-  const byKey = {}, byEmoji = {};
-  vals.forEach(function (r, i) {
-    const ru = String(r[C.ru] || '');
-    if (!ru.trim()) return;
-    (byKey[kSpace_(ru)] = byKey[kSpace_(ru)] || []).push(i);
-    (byEmoji[kEmoji_(ru)] = byEmoji[kEmoji_(ru)] || []).push(i);
+  const tabs = reqSheets_().map(function (x) {
+    const head = head_(x.sh), C = reqCols_(head, x.def.name);
+    const n = Math.max(x.sh.getLastRow() - 1, 0);
+    const t = { def: x.def, sh: x.sh, head: head, C: C, vals: n ? x.sh.getRange(2, 1, n, head.length).getValues() : [],
+      bgs: n ? x.sh.getRange(2, 1, n, head.length).getBackgrounds() : [], byKey: {}, byEmoji: {}, touched: {} };
+    t.vals.forEach(function (r, i) {
+      const ru = String(r[C.ru] || '');
+      if (!ru.trim()) return;
+      (t.byKey[kSpace_(ru)] = t.byKey[kSpace_(ru)] || []).push(i);
+      (t.byEmoji[kEmoji_(ru)] = t.byEmoji[kEmoji_(ru)] || []).push(i);
+    });
+    return t;
   });
   const report = [];
-  const touched = {};
   units.forEach(function (u) {
     const lang = SC_LANG[String(u.lang).toLowerCase().split('-')[0]];
     const kind = /^banner/i.test(u.file) ? 'Баннер' : /^push/i.test(u.file) ? 'Пуш' : '';
     const item = { file: u.file, lang: lang || u.lang, src: u.src, tgt: u.tgt };
-    if (!lang || C.lang[lang] === -1) { item.status = 'язык не найден'; report.push(item); return; }
-    let cand = byKey[kSpace_(u.src)] || byEmoji[kEmoji_(u.src)] || [];
-    if (kind && C.type !== -1) {
-      const same = cand.filter(function (i) { return String(vals[i][C.type]) === kind; });
-      if (same.length) cand = same;
+    if (!lang) { item.status = 'язык не найден'; report.push(item); return; }
+    const order = tabs.slice().sort(function (a, b) { return (b.def.type === kind) - (a.def.type === kind); });
+    let t = null, cand = [];
+    for (let k = 0; k < order.length && !cand.length; k++) {
+      t = order[k];
+      if (t.C.lang[lang] === -1) continue;
+      cand = t.byKey[kSpace_(u.src)] || t.byEmoji[kEmoji_(u.src)] || [];
     }
-    // Свежая строка, где этот язык ещё пуст; иначе самая свежая.
-    const empty = cand.filter(function (i) { return !String(vals[i][C.lang[lang]]).trim(); });
-    const i = (empty.length ? empty : cand).slice(-1)[0];
-    if (i === undefined) { item.status = 'строка не найдена'; report.push(item); return; }
+    if (!cand.length) { item.status = 'строка не найдена'; report.push(item); return; }
+    // Самая свежая строка (новые сверху), где этот язык ещё пуст; иначе самая свежая.
+    const C = t.C;
+    const empty = cand.filter(function (i) { return !String(t.vals[i][C.lang[lang]]).trim(); });
+    const i = (empty.length ? empty : cand)[0];
     item.row = i + 2;
-    item.id = vals[i][C.id];
-    const cur = String(vals[i][C.lang[lang]] || '').trim();
-    const max = Number(u.max) || (C.limit !== -1 ? limitOf_(vals[i][C.limit]) : 0);
+    item.id = t.vals[i][C.id];
+    item.sheet = t.def.name;
+    const cur = String(t.vals[i][C.lang[lang]] || '').trim();
+    const max = Number(u.max) || (C.limit !== -1 ? limitOf_(t.vals[i][C.limit]) : 0);
     if (cur && cur !== String(u.tgt).trim()) item.status = 'уже есть другой перевод';
     else if (cur) item.status = 'уже стоит';
     else item.status = 'встанет';
     if (max && String(u.tgt).length > max) item.over = String(u.tgt).length + ' / ' + max;
     if (apply && item.status === 'встанет') {
-      vals[i][C.lang[lang]] = u.tgt;
-      bgs[i][C.lang[lang]] = item.over ? CFG.RED : '#ffffff';
-      touched[i] = true;
+      t.vals[i][C.lang[lang]] = u.tgt;
+      t.bgs[i][C.lang[lang]] = item.over ? CFG.RED : '#ffffff';
+      t.touched[i] = true;
       item.status = 'вставлено';
     }
     report.push(item);
   });
-  if (apply && Object.keys(touched).length) {
-    Object.keys(touched).forEach(function (k) {
-      const i = Number(k);
-      const want = parseLangs_(C.langs !== -1 ? vals[i][C.langs] : '');
-      const list = want.length ? want : CFG.LANGS.filter(function (l) { return C.lang[l] !== -1 && String(vals[i][C.lang[l]]).trim(); });
-      const st = String(vals[i][C.status]);
-      if (list.every(function (l) { return String(vals[i][C.lang[l]]).trim(); }) && st !== CFG.ST.SENT) vals[i][C.status] = CFG.ST.DONE;
-      sh.getRange(i + 2, 1, 1, head.length).setValues([vals[i]]);
-      sh.getRange(i + 2, 1, 1, head.length).setBackgrounds([bgs[i]]);
+  if (apply) tabs.forEach(function (t) {
+    const C = t.C;
+    Object.keys(t.touched).forEach(function (k) {
+      const i = Number(k), v = t.vals[i];
+      const want = parseLangs_(C.langs !== -1 ? v[C.langs] : '');
+      const list = want.length ? want : CFG.LANGS.filter(function (l) { return C.lang[l] !== -1 && String(v[C.lang[l]]).trim(); });
+      if (list.every(function (l) { return C.lang[l] !== -1 && String(v[C.lang[l]]).trim(); }) && String(v[C.status]) !== CFG.ST.SENT) v[C.status] = CFG.ST.DONE;
+      t.sh.getRange(i + 2, 1, 1, t.head.length).setValues([v]);
+      t.sh.getRange(i + 2, 1, 1, t.head.length).setBackgrounds([t.bgs[i]]);
     });
-  }
+  });
   return report;
 }
 
 /* ---------- статистика ---------- */
 
 function buildStats() {
-  const sh = sheet_(CFG.REQ);
-  const head = head_(sh), C = reqCols_(head);
   const ss = SpreadsheetApp.getActive();
-  let st = ss.getSheetByName(CFG.STATS) || ss.insertSheet(CFG.STATS);
+  const st = ss.getSheetByName(CFG.STATS) || ss.insertSheet(CFG.STATS);
   st.getCharts().forEach(function (c) { st.removeChart(c); });
   st.clear();
-  if (sh.getLastRow() < 2) return;
-  const vals = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues().filter(function (r) { return String(r[C.ru]).trim(); });
   const tz = ss.getSpreadsheetTimeZone();
   const months = {}, langs = {}, products = {}, btypes = {};
-  let fromArc = 0, push = 0, banner = 0;
-  vals.forEach(function (r) {
-    const type = String(r[C.type] || 'Пуш');
-    const m = r[C.date] instanceof Date ? Utilities.formatDate(r[C.date], tz, 'yyyy-MM') : '—';
-    months[m] = months[m] || { push: 0, banner: 0, other: 0 };
-    if (type === 'Пуш') { months[m].push++; push++; } else if (type === 'Баннер') { months[m].banner++; banner++; } else months[m].other++;
-    parseLangs_(r[C.langs]).forEach(function (l) { langs[l] = (langs[l] || 0) + 1; });
-    const p = String(r[C.product] || '—').trim(); products[p] = (products[p] || 0) + 1;
-    if (type === 'Баннер') { const b = String(r[C.btype] || 'не указан'); btypes[b] = (btypes[b] || 0) + 1; }
-    if (/^♻️/.test(String(r[C.match]))) fromArc++;
+  let total = 0, fromArc = 0, push = 0, banner = 0;
+  reqSheets_().forEach(function (x) {
+    const sh = x.sh;
+    if (sh.getLastRow() < 2) return;
+    const head = head_(sh), C = reqCols_(head, x.def.name);
+    sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues().forEach(function (r) {
+      if (!String(r[C.ru]).trim()) return;
+      total++;
+      const m = r[C.date] instanceof Date ? Utilities.formatDate(r[C.date], tz, 'yyyy-MM') : '—';
+      months[m] = months[m] || { push: 0, banner: 0 };
+      if (x.def.type === 'Баннер') { months[m].banner++; banner++; } else { months[m].push++; push++; }
+      parseLangs_(C.langs !== -1 ? r[C.langs] : '').forEach(function (l) { langs[l] = (langs[l] || 0) + 1; });
+      const p = String((C.product !== -1 && r[C.product]) || '—').trim(); products[p] = (products[p] || 0) + 1;
+      if (x.def.type === 'Баннер') { const b = String((C.btype !== -1 && r[C.btype]) || 'не указан'); btypes[b] = (btypes[b] || 0) + 1; }
+      if (/^♻️/.test(String(r[C.match]))) fromArc++;
+    });
   });
+  if (!total) { st.getRange(1, 1).setValue('Пока нет запросов.'); return; }
   const write = function (row, col, title, rows) {
     st.getRange(row, col).setValue(title).setFontWeight('bold').setFontSize(12);
     st.getRange(row + 1, col, rows.length, rows[0].length).setValues(rows);
     st.getRange(row + 1, col, 1, rows[0].length).setFontWeight('bold').setBackground('#2e2566').setFontColor('#ffffff');
     return st.getRange(row + 1, col, rows.length, rows[0].length);
   };
+  const desc = function (o) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }); };
   st.getRange(1, 1).setValue('📊 Переводы маркетинга').setFontSize(16).setFontWeight('bold');
-  st.getRange(2, 1).setValue('Обновлено ' + Utilities.formatDate(new Date(), tz, 'dd.MM.yyyy HH:mm') + ' · всего ' + vals.length +
-    ' (пуши ' + push + ', баннеры ' + banner + ') · из архива: ' + fromArc + ' (' + Math.round(fromArc * 100 / Math.max(vals.length, 1)) + '%)');
-  const mRows = [['Месяц', 'Пуши', 'Баннеры', 'Другое']].concat(Object.keys(months).sort().map(function (m) { return [m, months[m].push, months[m].banner, months[m].other]; }));
+  st.getRange(2, 1).setValue('Обновлено ' + Utilities.formatDate(new Date(), tz, 'dd.MM.yyyy HH:mm') + ' · всего ' + total +
+    ' (пуши ' + push + ', баннеры ' + banner + ') · из архива: ' + fromArc + ' (' + Math.round(fromArc * 100 / total) + '%)');
+  const mRows = [['Месяц', 'Пуши', 'Баннеры']].concat(Object.keys(months).sort().map(function (m) { return [m, months[m].push, months[m].banner]; }));
   const mR = write(4, 1, 'По месяцам', mRows);
-  const lRows = [['Язык', 'Запросов']].concat(Object.keys(langs).sort(function (a, b) { return langs[b] - langs[a]; }).map(function (l) { return [l, langs[l]]; }));
-  const lR = write(4, 6, 'Какие языки просят', lRows);
-  const pRows = [['Продукт', 'Запросов']].concat(Object.keys(products).sort(function (a, b) { return products[b] - products[a]; }).map(function (p) { return [p, products[p]]; }));
-  const pR = write(4, 9, 'Для чего (продукт)', pRows);
-  const bRows = [['Тип баннера', 'Запросов']].concat(Object.keys(btypes).sort(function (a, b) { return btypes[b] - btypes[a]; }).map(function (b) { return [b, btypes[b]]; }));
-  const bR = bRows.length > 1 ? write(4, 12, 'Какие баннеры', bRows) : null;
+  const lRows = [['Язык', 'Запросов']].concat(desc(langs).map(function (l) { return [l, langs[l]]; }));
+  const lR = write(4, 5, 'Какие языки просят', lRows);
+  const pRows = [['Продукт', 'Запросов']].concat(desc(products).map(function (p) { return [p, products[p]]; }));
+  const pR = write(4, 8, 'Для чего (продукт)', pRows);
+  const bRows = [['Тип баннера', 'Запросов']].concat(desc(btypes).map(function (b) { return [b, btypes[b]]; }));
+  const bR = bRows.length > 1 ? write(4, 11, 'Какие баннеры', bRows) : null;
   const top = Math.max(mRows.length, lRows.length, pRows.length, bRows.length) + 7;
   st.insertChart(st.newChart().asColumnChart().addRange(mR).setNumHeaders(1).setPosition(top, 1, 0, 0)
-    .setOption('title', 'Запросы по месяцам').setOption('colors', ['#2a78d6', '#eb6834', '#1baf7a']).setOption('width', 620).setOption('height', 320).build());
-  st.insertChart(st.newChart().asBarChart().addRange(lR).setNumHeaders(1).setPosition(top, 8, 0, 0)
+    .setOption('title', 'Запросы по месяцам').setOption('colors', ['#2a78d6', '#eb6834']).setOption('width', 620).setOption('height', 320).build());
+  st.insertChart(st.newChart().asBarChart().addRange(lR).setNumHeaders(1).setPosition(top, 7, 0, 0)
     .setOption('title', 'Языки').setOption('colors', ['#2a78d6']).setOption('legend', { position: 'none' }).setOption('width', 460).setOption('height', 320).build());
   st.insertChart(st.newChart().asBarChart().addRange(pR).setNumHeaders(1).setPosition(top + 17, 1, 0, 0)
     .setOption('title', 'Продукты').setOption('colors', ['#2a78d6']).setOption('legend', { position: 'none' }).setOption('width', 620).setOption('height', 280).build());
-  if (bR) st.insertChart(st.newChart().asBarChart().addRange(bR).setNumHeaders(1).setPosition(top + 17, 8, 0, 0)
+  if (bR) st.insertChart(st.newChart().asBarChart().addRange(bR).setNumHeaders(1).setPosition(top + 17, 7, 0, 0)
     .setOption('title', 'Типы баннеров').setOption('colors', ['#eb6834']).setOption('legend', { position: 'none' }).setOption('width', 460).setOption('height', 280).build());
-  st.autoResizeColumns(1, 13);
+  st.autoResizeColumns(1, 12);
 }
 
 /* ---------- настройка ---------- */
@@ -587,15 +680,18 @@ function buildStats() {
 function setup() {
   const ss = SpreadsheetApp.getActive();
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (['onRequestEdit', 'buildStats'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
+    if (['onRequestEdit', 'buildStats', 'flushInput'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('onRequestEdit').forSpreadsheet(ss).onEdit().create();
+  ScriptApp.newTrigger('flushInput').timeBased().everyMinutes(1).create();
   ScriptApp.newTrigger('buildStats').timeBased().everyDays(1).atHour(7).create();
-  const sh = sheet_(CFG.REQ), C = reqCols_(head_(sh));
-  // Служебные колонки: правка возможна, но с предупреждением.
-  sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) { if (String(p.getDescription()).indexOf('Переводы:') === 0) p.remove(); });
-  [C.id, C.match].forEach(function (c) {
-    sh.getRange(1, c + 1, sh.getMaxRows(), 1).protect().setDescription('Переводы: заполняется автоматически').setWarningOnly(true);
+  reqSheets_().forEach(function (x) {
+    const sh = x.sh, C = reqCols_(head_(sh), x.def.name);
+    // Служебные колонки: правка возможна, но с предупреждением.
+    sh.getProtections(SpreadsheetApp.ProtectionType.RANGE).forEach(function (p) { if (String(p.getDescription()).indexOf('Переводы:') === 0) p.remove(); });
+    [C.id, C.match].forEach(function (c) {
+      sh.getRange(1, c + 1, sh.getMaxRows(), 1).protect().setDescription('Переводы: заполняется автоматически').setWarningOnly(true);
+    });
   });
   token_();
   buildStats();
@@ -635,14 +731,14 @@ function doPost(e) {
   try {
     // Переводы из Smartcat, присланные расширением: сначала apply=false (что куда встанет), потом apply=true.
     if (body.action === 'smartcat') return json_({ report: smartcatImport(body.units || [], !!body.apply) });
-    const rn = rowById_(body.id);
-    if (!rn) return json_({ error: 'не нашла ' + body.id });
-    if (body.action === 'match') matchRows_([rn], true);
+    const at = rowById_(body.id);
+    if (!at) return json_({ error: 'не нашла ' + body.id });
+    if (body.action === 'match') matchRows_(at.sh, [at.row], true);
     else if (body.action === 'status') {
-      const C = reqCols_(head_(sheet_(CFG.REQ)));
+      const C = reqCols_(head_(at.sh), at.sh.getName());
       if (Object.keys(CFG.ST).map(function (k) { return CFG.ST[k]; }).indexOf(body.status) === -1) return json_({ error: 'нет такого статуса' });
-      sheet_(CFG.REQ).getRange(rn, C.status + 1).setValue(body.status);
-      if (body.status === CFG.ST.SENT || body.status === CFG.ST.DONE) archiveRows_([rn]);
+      at.sh.getRange(at.row, C.status + 1).setValue(body.status);
+      if (body.status === CFG.ST.SENT || body.status === CFG.ST.DONE) archiveRows_(at.sh, [at.row]);
     }
     return json_(listForExtension_());
   } finally {
@@ -651,25 +747,31 @@ function doPost(e) {
 }
 
 function rowById_(id) {
-  const sh = sheet_(CFG.REQ), C = reqCols_(head_(sh));
-  if (sh.getLastRow() < 2) return 0;
-  const ids = sh.getRange(2, C.id + 1, sh.getLastRow() - 1, 1).getDisplayValues();
-  for (let i = ids.length - 1; i >= 0; i--) if (ids[i][0] === id) return i + 2;
-  return 0;
+  const tabs = reqSheets_();
+  for (let k = 0; k < tabs.length; k++) {
+    const sh = tabs[k].sh, C = reqCols_(head_(sh), tabs[k].def.name);
+    if (sh.getLastRow() < 2) continue;
+    const ids = sh.getRange(2, C.id + 1, sh.getLastRow() - 1, 1).getDisplayValues();
+    for (let i = 0; i < ids.length; i++) if (ids[i][0] === id) return { sh: sh, row: i + 2 };
+  }
+  return null;
 }
 
-// Незакрытые запросы + счётчики. Расширение по ним показывает уведомления и подсказки.
+// Незакрытые запросы + счётчики (старые первыми, свежие в конце). Расширение по ним показывает уведомления и подсказки.
 function listForExtension_() {
   const ss = SpreadsheetApp.getActive();
-  const sh = sheet_(CFG.REQ), head = head_(sh), C = reqCols_(head);
   const tz = ss.getSpreadsheetTimeZone();
   const counts = {};
-  const items = [];
-  if (sh.getLastRow() >= 2) {
+  let items = [];
+  reqSheets_().forEach(function (x) {
+    const sh = x.sh;
+    if (sh.getLastRow() < 2) return;
+    const head = head_(sh), C = reqCols_(head, x.def.name);
+    const base = ss.getUrl() + '#gid=' + sh.getSheetId();
     const vals = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues();
     const bgs = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getBackgrounds();
     vals.forEach(function (r, i) {
-      if (!String(r[C.ru]).trim()) return;
+      if (!String(r[C.ru]).trim() || !String(r[C.id]).trim()) return;
       const st = String(r[C.status] || CFG.ST.NEW);
       counts[st] = (counts[st] || 0) + 1;
       if ([CFG.ST.SENT, CFG.ST.CANCEL].indexOf(st) !== -1) return;
@@ -680,17 +782,22 @@ function listForExtension_() {
       });
       const fmt = function (d, f) { return d instanceof Date ? Utilities.formatDate(d, tz, f) : String(d || ''); };
       items.push({
-        id: String(r[C.id]), row: i + 2, status: st, type: String(r[C.type] || ''), btype: C.btype !== -1 ? String(r[C.btype] || '') : '',
-        product: C.product !== -1 ? String(r[C.product] || '') : '', langs: parseLangs_(C.langs !== -1 ? r[C.langs] : ''),
-        limit: C.limit !== -1 ? limitOf_(r[C.limit]) : 0, date: fmt(r[C.date], 'dd.MM'), deadline: C.deadline !== -1 ? fmt(r[C.deadline], 'dd.MM HH:mm') : '',
+        id: String(r[C.id]), row: i + 2, url: base + '&range=A' + (i + 2), status: st, type: x.def.type,
+        btype: C.btype !== -1 ? String(r[C.btype] || '') : '', product: C.product !== -1 ? String(r[C.product] || '') : '',
+        langs: parseLangs_(C.langs !== -1 ? r[C.langs] : ''), limit: C.limit !== -1 ? limitOf_(r[C.limit]) : 0,
+        date: fmt(r[C.date], 'dd.MM'), sort: r[C.date] instanceof Date ? r[C.date].getTime() : 0,
+        deadline: C.deadline !== -1 ? fmt(r[C.deadline], 'dd.MM HH:mm') : '',
         link: C.link !== -1 ? String(r[C.link] || '') : '', ru: String(r[C.ru]), match: String(r[C.match] || ''), tr: tr,
       });
     });
-  }
+  });
+  items.sort(function (a, b) { return a.sort - b.sort || (a.id < b.id ? -1 : 1); });
+  items = items.slice(-300);
+  const first = reqSheets_()[0];
   return {
     updated: Utilities.formatDate(new Date(), tz, 'dd.MM HH:mm'),
-    url: ss.getUrl() + '#gid=' + sh.getSheetId(),
+    url: ss.getUrl() + (first ? '#gid=' + first.sh.getSheetId() : ''),
     counts: counts,
-    items: items.slice(-300),
+    items: items,
   };
 }
