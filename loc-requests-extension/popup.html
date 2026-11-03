@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header>
+    <div><b>🌍 Переводы маркетинга</b><div class="sub" id="sub">загрузка…</div></div>
+    <div class="hbtns"><button id="refresh" title="Обновить">⟳</button><button id="gear" title="Настройки">⚙</button></div>
+  </header>
+
+  <section id="main">
+    <div class="drop" id="drop"><b>📥 Перетащите zip из Smartcat</b><span>переводы сами встанут в таблицу</span>
+      <input type="file" id="file" multiple accept=".zip,.xliff,.xlf" hidden></div>
+    <div id="sc" class="hidden"></div>
+    <nav id="tabs"></nav>
+    <div id="list"></div>
+  </section>
+
+  <section id="settings" class="hidden">
+    <h3>Подключение к таблице</h3>
+    <label>Ссылка веб-приложения (заканчивается на /exec)<input id="url" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <label>Ключ (меню таблицы «🌍 Переводы» → «🔑 Ключ для расширения»)<input id="token" type="password"></label>
+    <label>Проверять новые запросы каждые
+      <select id="every"><option value="1">1 минуту</option><option value="2">2 минуты</option><option value="5">5 минут</option><option value="15">15 минут</option></select></label>
+    <div class="row"><button class="p" id="save">Сохранить и проверить</button><button id="back">Назад</button></div>
+    <p class="msg" id="smsg"></p>
+  </section>
+
+  <div class="toast" id="toast"></div>
+  <script src="jszip.min.js"></script>
+  <script src="api.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

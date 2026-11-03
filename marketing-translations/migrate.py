@@ -28,6 +28,10 @@ def product(v):
     for p in PRODUCTS:
         if t.lower() == p.lower(): return p
     return t
+# Строки-образцы («ПРИМЕР ЗАПОЛНЕНИЯ»): вместо перевода там подсказка «Текст на узбекском».
+def is_sample(tr):
+    return any(re.search(r'^\s*текст\s*(пуша\s*)?на\s*\w+|^\s*текстна', s(x), re.I) for x in tr)
+
 def limit(v):
     m = re.search(r'\d+', s(v).replace('.0', ''))
     return int(m.group()) if m else None
@@ -41,12 +45,14 @@ for r in P.iter_rows(min_row=2, values_only=True):
     if isinstance(r[0], datetime.datetime): last = {'date': r[0], 'product': r[1], 'langs': r[2]}
     elif not last: continue
     tr = dict(zip(['KK', 'KY', 'UZ', 'HY', 'TG', 'KA', 'AZ'], [s(x) for x in r[6:13]]))
+    if is_sample(tr.values()): continue
     rows.append(dict(date=last['date'], type='Пуш', btype='', product=product(r[1] or last['product']),
                      langs=langs(r[2] or last['langs']), limit=limit(r[4]), ctx=s(r[3]), ru=ru, tr=tr))
 for r in B.iter_rows(min_row=2, values_only=True):
     ru = s(r[6])
     if not ru or not isinstance(r[0], datetime.datetime): continue
     tr = dict(zip(['KK', 'KY', 'UZ', 'HY', 'TG', 'KA', 'AZ', 'EN'], [s(x) for x in r[7:15]]))
+    if is_sample(tr.values()): continue
     rows.append(dict(date=r[0], type='Баннер', btype=s(r[3]), product=product(r[1]), langs=langs(r[2]),
                      limit=limit(r[5]), ctx=s(r[4]), ru=ru, tr=tr))
 rows.sort(key=lambda x: (x['date'], x['type']))
@@ -57,8 +63,10 @@ for x in rows:
     x['id'] = '%s-%04d' % (pre, cnt[pre])
     want = x['langs'] or [c for c in LANGS if x['tr'].get(c)]
     x['langs'] = want
-    done = want and all(x['tr'].get(c) for c in want)
-    x['status'] = 'Отдан' if done else 'Проверить'
+    # Старые строки — уже отданы. Если каких-то языков не хватало, пишем это в «Уже переводили?».
+    miss = [c for c in want if not x['tr'].get(c)]
+    x['status'] = 'Отдан'
+    x['note'] = ('⚠️ при переносе не было перевода: ' + ', '.join(miss)) if miss else ''
 
 wb = openpyxl.Workbook()
 HEAD = Font(bold=True, color='FFFFFF')
@@ -79,7 +87,7 @@ for c in ws[1]:
 ws.row_dimensions[1].height = 30
 for x in rows:
     ws.append([x['id'], x['date'].date(), x['type'], x['btype'], x['product'], ', '.join(x['langs']), x['limit'], None, '',
-               x['ctx'], x['ru'], x['status'], ''] + [x['tr'].get(c, '') for c in LANGS])
+               x['ctx'], x['ru'], x['status'], x['note']] + [x['tr'].get(c, '') for c in LANGS])
 n = ws.max_row
 for row in ws.iter_rows(min_row=2, max_row=n):
     row[1].number_format = 'DD.MM.YYYY'
@@ -108,7 +116,7 @@ for r in R.iter_rows(min_row=2, values_only=True):
     ru = s(r[1])
     if not ru: continue
     tr = [s(x) for x in r[2:9]]
-    if not any(tr): continue
+    if not any(tr) or is_sample(tr): continue
     wa.append([srcname, None, 'Пуш', ru] + tr + [''])
 for row in wa.iter_rows(min_row=2):
     for c in row: c.alignment = WRAP
@@ -158,4 +166,4 @@ for c in dc[1]: c.font = HEAD; c.fill = HFILL
 for i in range(1, 7): dc.column_dimensions[L(i)].width = 22
 
 wb.save(sys.argv[2])
-print('запросов:', len(rows), dict(cnt), 'архив:', wa.max_row - 1, 'статусы:', collections.Counter(x['status'] for x in rows))
+print('запросов:', len(rows), dict(cnt), 'архив:', wa.max_row - 1, 'без части языков:', sum(1 for x in rows if x['note']))

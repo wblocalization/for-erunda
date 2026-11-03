@@ -78,7 +78,9 @@ async function read(list) {
 }
 
 const CLS = { 'встанет': 'ok', 'вставлено': 'ok', 'уже стоит': 'gray', 'уже есть другой перевод': 'warn', 'строка не найдена': 'bad', 'язык не найден': 'bad' };
+const ORDER = ['вставлено', 'встанет', 'уже есть другой перевод', 'уже стоит', 'строка не найдена', 'язык не найден'];
 function show(report) {
+  report = report.slice().sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
   const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const ready = report.filter(r => r.status === 'встанет').length;
   const done = report.filter(r => r.status === 'вставлено').length;
