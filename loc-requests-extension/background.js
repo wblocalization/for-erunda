@@ -50,7 +50,7 @@ async function poll() {
     });
   });
   if (fresh.length > 5) {
-    notify('req:more', { title: 'Ещё новых запросов: ' + (fresh.length - 5), message: 'Откройте окошко расширения' });
+    notify('req:more', { title: 'Ещё новых запросов: ' + (fresh.length - 5), message: 'Откройте панель расширения' });
   }
   await chrome.storage.local.set({ seen: Array.from(new Set(st.seen.concat(ids))).slice(-3000), data });
 }
@@ -60,8 +60,15 @@ async function schedule() {
   chrome.alarms.create('poll', { periodInMinutes: Math.max(1, Number(s.every) || 2) });
 }
 
-chrome.runtime.onInstalled.addListener(() => { schedule(); poll(); });
-chrome.runtime.onStartup.addListener(() => { schedule(); poll(); });
+// Клик по значку открывает боковую панель. Где браузер её не умеет (например, Яндекс) — обычное окошко.
+function panelMode() {
+  if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+  else chrome.action.setPopup({ popup: 'panel.html' });
+}
+panelMode();
+
+chrome.runtime.onInstalled.addListener(() => { panelMode(); schedule(); poll(); });
+chrome.runtime.onStartup.addListener(() => { panelMode(); schedule(); poll(); });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'poll') poll(); });
 chrome.storage.onChanged.addListener((ch, area) => { if (area === 'sync' && (ch.url || ch.token || ch.every)) { schedule(); poll(); } });
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
@@ -72,11 +79,15 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
   }
 });
 
-// Клик по уведомлению — открыть окошко расширения (или таблицу, если браузер не умеет).
+// Клик по уведомлению — открыть боковую панель (или окошко / таблицу, если браузер не умеет).
 chrome.notifications.onClicked.addListener(async id => {
   chrome.notifications.clear(id);
-  try { await chrome.action.openPopup(); }
-  catch (e) {
+  try {
+    if (chrome.sidePanel && chrome.sidePanel.open) {
+      const w = await chrome.windows.getLastFocused();
+      await chrome.sidePanel.open({ windowId: w.id });
+    } else await chrome.action.openPopup();
+  } catch (e) {
     const { data } = await chrome.storage.local.get({ data: null });
     if (data && data.url) chrome.tabs.create({ url: data.url });
   }

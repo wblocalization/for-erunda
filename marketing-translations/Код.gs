@@ -26,6 +26,9 @@ const CFG = {
     TG: ['таджик', 'tg'], KA: ['грузин', 'ka'], AZ: ['азербайджан', 'az'], EN: ['англ', 'en'],
   },
   ST: { NEW: 'Новый', ARCHIVE: 'Из архива', CHECK: 'Проверить', VENDOR: 'У подрядчика', DONE: 'Готово', SENT: 'Отдан', CANCEL: 'Отменён' },
+  // Как статус выглядит в таблице (с иконкой). Скрипт понимает и старые значения без иконок.
+  ST_LABEL: { 'Новый': '🆕 Новый', 'Из архива': '♻️ Из архива', 'Проверить': '⚠️ Проверить', 'У подрядчика': '📤 У подрядчика',
+    'Готово': '✅ Готово', 'Отдан': '📨 Отдан', 'Отменён': '✖️ Отменён' },
   GREEN: '#e2f6ec',   // перевод из архива, можно брать
   YELLOW: '#fff4dc',  // из архива, но проверить (цифры, знаки)
   RED: '#ffd6e0',     // длиннее лимита
@@ -46,6 +49,7 @@ function onOpen() {
     .addItem('📚 Пополнить архив готовыми', 'archiveDone')
     .addItem('📊 Обновить статистику', 'buildStats')
     .addSeparator()
+    .addItem('📖 Что значат цвета и статусы', 'showLegend')
     .addItem('🔑 Ключ для расширения', 'showToken')
     .addItem('⚙️ Настроить таблицу (владелец)', 'setup')
     .addToUi();
@@ -67,9 +71,16 @@ function reqSheets_() {
   return CFG.REQS.map(function (d) { return { def: d, sh: ss.getSheetByName(d.name) }; }).filter(function (x) { return x.sh; });
 }
 
+// Названия колонок: первая строка заголовка без иконки («✍️ Текст RU\nподсказка» → «Текст RU»).
 function head_(sh) {
-  return sh.getRange(1, 1, 1, sh.getLastColumn()).getDisplayValues()[0].map(function (h) { return String(h).trim(); });
+  return sh.getRange(1, 1, 1, sh.getLastColumn()).getDisplayValues()[0].map(function (h) {
+    return String(h).split('\n')[0].replace(/^[^\p{L}\p{N}]+/u, '').trim();
+  });
 }
+
+// «✅ Готово» → «Готово» и обратно.
+function stPlain_(v) { return String(v || '').replace(/^[^\p{L}]+/u, '').trim(); }
+function stLabel_(st) { return CFG.ST_LABEL[st] || st; }
 
 // Индексы колонок вкладки запросов по названиям (0-based).
 function reqCols_(head, name) {
@@ -193,7 +204,7 @@ function loadArchive_(skip) {
     const vals = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getDisplayValues();
     vals.forEach(function (r, i) {
       if (skip && skip.sheet === x.def.name && skip.row === i + 2) return;
-      const st = r[C.status];
+      const st = stPlain_(r[C.status]);
       if (st !== CFG.ST.DONE && st !== CFG.ST.SENT && st !== CFG.ST.ARCHIVE) return;
       const tr = {};
       CFG.LANGS.forEach(function (l) { if (C.lang[l] !== -1 && String(r[C.lang[l]]).trim()) tr[l] = r[C.lang[l]]; });
@@ -276,7 +287,7 @@ function matchAllNew() {
     const C = reqCols_(head_(sh), x.def.name);
     const st = sh.getRange(2, C.status + 1, sh.getLastRow() - 1, 1).getDisplayValues();
     const rows = [];
-    st.forEach(function (v, i) { if (!v[0] || v[0] === CFG.ST.NEW) rows.push(i + 2); });
+    st.forEach(function (v, i) { if (!v[0] || stPlain_(v[0]) === CFG.ST.NEW) rows.push(i + 2); });
     const r = matchRows_(sh, rows, true);
     Object.keys(res).forEach(function (k) { res[k] += r[k]; });
   });
@@ -309,11 +320,11 @@ function matchRows_(sh, rowNums, force) {
       changed = true;
     }
     if (C.date !== -1 && !v[C.date]) { v[C.date] = new Date(Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd') + 'T00:00:00'); changed = true; }
-    if (!String(v[C.status]).trim()) { v[C.status] = CFG.ST.NEW; changed = true; }
+    if (!String(v[C.status]).trim()) { v[C.status] = stLabel_(CFG.ST.NEW); changed = true; }
 
     const langs = parseLangs_(C.langs !== -1 ? v[C.langs] : '');
     const want = langs.length ? langs : CFG.ALL;
-    const st = v[C.status];
+    const st = stPlain_(v[C.status]);
     if (force || st === CFG.ST.NEW) {
       const found = findInArchive_(ru, want, arc);
       const filled = [], check = [], missing = [];
@@ -346,7 +357,7 @@ function matchRows_(sh, rowNums, force) {
         text = 'новый текст';
       }
       if (text !== v[C.match]) { v[C.match] = text; changed = true; }
-      if (first && !missing.length && st === CFG.ST.NEW) { v[C.status] = check.length ? CFG.ST.CHECK : CFG.ST.ARCHIVE; changed = true; }
+      if (first && !missing.length && st === CFG.ST.NEW) { v[C.status] = stLabel_(check.length ? CFG.ST.CHECK : CFG.ST.ARCHIVE); changed = true; }
     }
     if (checkLimits_(v, bg, C)) changed = true;
     if (changed) {
@@ -400,7 +411,7 @@ function onRequestEdit(e) {
     for (let r = Math.max(2, e.range.getRow()); r <= e.range.getLastRow(); r++) rows.push(r);
     if (touches(C.ru) || touches(C.langs)) {
       matchRows_(sh, rows, false);
-    } else if (touches(C.status) && /^(Готово|Отдан)$/.test(String(e.value || ''))) {
+    } else if (touches(C.status) && /^(Готово|Отдан)$/.test(stPlain_(e.value))) {
       archiveRows_(sh, rows);
     } else {
       // Поправили перевод или лимит — перепроверяем длину.
@@ -425,7 +436,7 @@ function setStatusSelected_(status) {
   if (!sh) return;
   const C = reqCols_(head_(sh), sh.getName());
   const rows = selectedRows_(sh).filter(function (i) { return String(sh.getRange(i, C.ru + 1).getValue()).trim(); });
-  rows.forEach(function (i) { sh.getRange(i, C.status + 1).setValue(status); });
+  rows.forEach(function (i) { sh.getRange(i, C.status + 1).setValue(stLabel_(status)); });
   if (status === CFG.ST.SENT) archiveRows_(sh, rows);
   SpreadsheetApp.getActive().toast('Статус «' + status + '»: ' + rows.length + ' строк.', 'Переводы', 5);
 }
@@ -441,10 +452,11 @@ function archiveDone() {
     const C = reqCols_(head_(sh), x.def.name);
     const st = sh.getRange(2, C.status + 1, sh.getLastRow() - 1, 1).getDisplayValues();
     const rows = [];
-    st.forEach(function (v, i) { if (v[0] === CFG.ST.DONE || v[0] === CFG.ST.SENT) rows.push(i + 2); });
+    st.forEach(function (v, i) { const p = stPlain_(v[0]); if (p === CFG.ST.DONE || p === CFG.ST.SENT) rows.push(i + 2); });
     n += archiveRows_(sh, rows);
   });
-  SpreadsheetApp.getActive().toast('В архив добавлено: ' + n + '.', 'Архив', 5);
+  try { SpreadsheetApp.getActive().toast('В архив добавлено: ' + n + '.', 'Архив', 5); } catch (e) { /* вызов из расширения */ }
+  return n;
 }
 
 function archiveRows_(sh, rowNums) {
@@ -544,7 +556,7 @@ function smartcatImport(units, apply) {
       const i = Number(k), v = t.vals[i];
       const want = parseLangs_(C.langs !== -1 ? v[C.langs] : '');
       const list = want.length ? want : CFG.LANGS.filter(function (l) { return C.lang[l] !== -1 && String(v[C.lang[l]]).trim(); });
-      if (list.every(function (l) { return C.lang[l] !== -1 && String(v[C.lang[l]]).trim(); }) && String(v[C.status]) !== CFG.ST.SENT) v[C.status] = CFG.ST.DONE;
+      if (list.every(function (l) { return C.lang[l] !== -1 && String(v[C.lang[l]]).trim(); }) && stPlain_(v[C.status]) !== CFG.ST.SENT) v[C.status] = stLabel_(CFG.ST.DONE);
       t.sh.getRange(i + 2, 1, 1, t.head.length).setValues([v]);
       t.sh.getRange(i + 2, 1, 1, t.head.length).setBackgrounds([t.bgs[i]]);
     });
@@ -554,31 +566,45 @@ function smartcatImport(units, apply) {
 
 /* ---------- статистика ---------- */
 
-function buildStats() {
+// Считает всё для статистики: и для листа «📊 Статистика», и для боковой панели расширения.
+function collectStats_() {
   const ss = SpreadsheetApp.getActive();
-  const st = ss.getSheetByName(CFG.STATS) || ss.insertSheet(CFG.STATS);
-  st.getCharts().forEach(function (c) { st.removeChart(c); });
-  st.clear();
   const tz = ss.getSpreadsheetTimeZone();
-  const months = {}, langs = {}, products = {}, btypes = {};
-  let total = 0, fromArc = 0, push = 0, banner = 0;
+  const S = { total: 0, push: 0, banner: 0, fromArc: 0, months: {}, langs: {}, products: {}, btypes: {}, statuses: {}, overdue: 0 };
+  const now = new Date();
   reqSheets_().forEach(function (x) {
     const sh = x.sh;
     if (sh.getLastRow() < 2) return;
     const head = head_(sh), C = reqCols_(head, x.def.name);
     sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getValues().forEach(function (r) {
       if (!String(r[C.ru]).trim()) return;
-      total++;
+      S.total++;
+      const isBanner = x.def.type === 'Баннер';
       const m = r[C.date] instanceof Date ? Utilities.formatDate(r[C.date], tz, 'yyyy-MM') : '—';
-      months[m] = months[m] || { push: 0, banner: 0 };
-      if (x.def.type === 'Баннер') { months[m].banner++; banner++; } else { months[m].push++; push++; }
-      parseLangs_(C.langs !== -1 ? r[C.langs] : '').forEach(function (l) { langs[l] = (langs[l] || 0) + 1; });
-      const p = String((C.product !== -1 && r[C.product]) || '—').trim(); products[p] = (products[p] || 0) + 1;
-      if (x.def.type === 'Баннер') { const b = String((C.btype !== -1 && r[C.btype]) || 'не указан'); btypes[b] = (btypes[b] || 0) + 1; }
-      if (/^♻️/.test(String(r[C.match]))) fromArc++;
+      const mo = S.months[m] = S.months[m] || { push: 0, banner: 0, arc: 0 };
+      if (isBanner) { mo.banner++; S.banner++; } else { mo.push++; S.push++; }
+      parseLangs_(C.langs !== -1 ? r[C.langs] : '').forEach(function (l) { S.langs[l] = (S.langs[l] || 0) + 1; });
+      const p = String((C.product !== -1 && r[C.product]) || '—').trim(); S.products[p] = (S.products[p] || 0) + 1;
+      if (isBanner) { const b = String((C.btype !== -1 && r[C.btype]) || 'не указан'); S.btypes[b] = (S.btypes[b] || 0) + 1; }
+      if (/^♻️/.test(String(r[C.match]))) { S.fromArc++; mo.arc++; }
+      const st = stPlain_(r[C.status]) || CFG.ST.NEW;
+      S.statuses[st] = (S.statuses[st] || 0) + 1;
+      const open = [CFG.ST.NEW, CFG.ST.CHECK, CFG.ST.VENDOR].indexOf(st) !== -1;
+      if (open && C.deadline !== -1 && r[C.deadline] instanceof Date && r[C.deadline] < now) S.overdue++;
     });
   });
-  if (!total) { st.getRange(1, 1).setValue('Пока нет запросов.'); return; }
+  S.thisMonth = Utilities.formatDate(now, tz, 'yyyy-MM');
+  S.updated = Utilities.formatDate(now, tz, 'dd.MM.yyyy HH:mm');
+  return S;
+}
+
+function buildStats() {
+  const ss = SpreadsheetApp.getActive();
+  const st = ss.getSheetByName(CFG.STATS) || ss.insertSheet(CFG.STATS);
+  st.getCharts().forEach(function (c) { st.removeChart(c); });
+  st.clear();
+  const S = collectStats_();
+  if (!S.total) { st.getRange(1, 1).setValue('Пока нет запросов.'); return; }
   const write = function (row, col, title, rows) {
     st.getRange(row, col).setValue(title).setFontWeight('bold').setFontSize(12);
     st.getRange(row + 1, col, rows.length, rows[0].length).setValues(rows);
@@ -587,15 +613,15 @@ function buildStats() {
   };
   const desc = function (o) { return Object.keys(o).sort(function (a, b) { return o[b] - o[a]; }); };
   st.getRange(1, 1).setValue('📊 Переводы маркетинга').setFontSize(16).setFontWeight('bold');
-  st.getRange(2, 1).setValue('Обновлено ' + Utilities.formatDate(new Date(), tz, 'dd.MM.yyyy HH:mm') + ' · всего ' + total +
-    ' (пуши ' + push + ', баннеры ' + banner + ') · из архива: ' + fromArc + ' (' + Math.round(fromArc * 100 / total) + '%)');
-  const mRows = [['Месяц', 'Пуши', 'Баннеры']].concat(Object.keys(months).sort().map(function (m) { return [m, months[m].push, months[m].banner]; }));
+  st.getRange(2, 1).setValue('Обновлено ' + S.updated + ' · всего ' + S.total +
+    ' (пуши ' + S.push + ', баннеры ' + S.banner + ') · из архива: ' + S.fromArc + ' (' + Math.round(S.fromArc * 100 / S.total) + '%)');
+  const mRows = [['Месяц', 'Пуши', 'Баннеры']].concat(Object.keys(S.months).sort().map(function (m) { return [m, S.months[m].push, S.months[m].banner]; }));
   const mR = write(4, 1, 'По месяцам', mRows);
-  const lRows = [['Язык', 'Запросов']].concat(desc(langs).map(function (l) { return [l, langs[l]]; }));
+  const lRows = [['Язык', 'Запросов']].concat(desc(S.langs).map(function (l) { return [l, S.langs[l]]; }));
   const lR = write(4, 5, 'Какие языки просят', lRows);
-  const pRows = [['Продукт', 'Запросов']].concat(desc(products).map(function (p) { return [p, products[p]]; }));
+  const pRows = [['Продукт', 'Запросов']].concat(desc(S.products).map(function (p) { return [p, S.products[p]]; }));
   const pR = write(4, 8, 'Для чего (продукт)', pRows);
-  const bRows = [['Тип баннера', 'Запросов']].concat(desc(btypes).map(function (b) { return [b, btypes[b]]; }));
+  const bRows = [['Тип баннера', 'Запросов']].concat(desc(S.btypes).map(function (b) { return [b, S.btypes[b]]; }));
   const bR = bRows.length > 1 ? write(4, 11, 'Какие баннеры', bRows) : null;
   const top = Math.max(mRows.length, lRows.length, pRows.length, bRows.length) + 7;
   st.insertChart(st.newChart().asColumnChart().addRange(mR).setNumHeaders(1).setPosition(top, 1, 0, 0)
@@ -607,6 +633,34 @@ function buildStats() {
   if (bR) st.insertChart(st.newChart().asBarChart().addRange(bR).setNumHeaders(1).setPosition(top + 17, 7, 0, 0)
     .setOption('title', 'Типы баннеров').setOption('colors', ['#eb6834']).setOption('legend', { position: 'none' }).setOption('width', 460).setOption('height', 280).build());
   st.autoResizeColumns(1, 12);
+}
+
+// Поиск по всему, что уже переводили: «такой же / почти такой же» текст + все тексты, где встречаются эти слова.
+function searchArchive_(q) {
+  q = String(q || '').trim();
+  if (!q) return { per: {}, fuzzy: null, hits: [] };
+  const arc = loadArchive_(null);
+  const found = findInArchive_(q, CFG.LANGS, arc);
+  const per = {};
+  Object.keys(found.per).forEach(function (l) {
+    const p = found.per[l];
+    per[l] = { level: p.level, words: LEVEL_WORDS[p.level], text: p.text, src: p.src, ru: p.ru };
+  });
+  // Тексты, где встречаются слова из запроса: больше совпавших слов — выше, при равенстве — свежее.
+  const words = kEmoji_(q).split(' ').filter(function (w) { return w.length >= 3; });
+  const need = Math.max(1, Math.ceil(words.length * 0.6));
+  const scored = [], seen = {};
+  for (let i = arc.length - 1; i >= 0 && words.length; i--) {
+    const x = arc[i];
+    if (seen[x.k1]) continue;
+    const n = words.filter(function (w) { return x.k2.indexOf(w) !== -1; }).length;
+    if (n < need) continue;
+    seen[x.k1] = true;
+    scored.push({ n: n, i: i, hit: { src: x.src, ru: x.ru, tr: x.tr } });
+  }
+  scored.sort(function (a, b) { return b.n - a.n || b.i - a.i; });
+  const hits = scored.slice(0, 25).map(function (x) { return x.hit; });
+  return { per: per, fuzzy: found.fuzzy, hits: hits };
 }
 
 /* ---------- настройка ---------- */
@@ -626,9 +680,67 @@ function setup() {
       sh.getRange(1, c + 1, sh.getMaxRows(), 1).protect().setDescription('Переводы: заполняется автоматически').setWarningOnly(true);
     });
   });
+  reqSheets_().forEach(function (x) { restyle_(x.sh); });
   token_();
   buildStats();
-  SpreadsheetApp.getUi().alert('Готово: триггеры поставлены, статистика построена.\nКлюч для расширения — меню «🌍 Переводы» → «🔑 Ключ для расширения».');
+  SpreadsheetApp.getUi().alert('Готово: триггеры поставлены, оформление обновлено, статистика построена.\nКлюч для расширения — меню «🌍 Переводы» → «🔑 Ключ для расширения».');
+}
+
+/* ---------- оформление (для таблиц, созданных до новой версии) ---------- */
+
+const LOOK = {
+  CLIENT: { 'Тип баннера': 'из списка', 'Продукт': 'из списка', 'Языки': '«все» или KK, UZ…', 'Лимит': 'символов', 'Дедлайн': 'когда нужен',
+    'Ссылка (тред / Figma)': 'Band / Figma', 'Контекст': 'где и зачем этот текст', 'Текст RU': 'одна строка = один текст' },
+  AUTO: { 'ID': 'сам', 'Дата': 'сама', 'Статус': 'меняет локализация', 'Уже переводили?': 'таблица ищет в архиве сама' },
+  LANG: { KK: ['казахский', '#1f8a8a'], KY: ['кыргызский', '#c0392b'], UZ: ['узбекский', '#2a78d6'], HY: ['армянский', '#d9822b'],
+    TG: ['таджикский', '#2e8b57'], KA: ['грузинский', '#b0306a'], AZ: ['азербайджанский', '#5b4bc4'], EN: ['английский', '#5f6b7a'] },
+  // статус → [заливка, текст], как в «📖 Как заполнять»
+  ST: { 'Новый': ['#ffd3e2', '#a1204f'], 'Из архива': ['#cdefdc', '#17683f'], 'Проверить': ['#ffe7b0', '#7a4f00'], 'У подрядчика': ['#d6e6fb', '#1d5fb8'],
+    'Готово': ['#e0d9fa', '#4a3a8c'], 'Отдан': ['#eeeeee', '#6b6b6b'], 'Отменён': ['#f5f5f5', '#9a9a9a'] },
+};
+
+// Заголовки с подсказками, статусы с иконками, выпадающий список и цвета статусов.
+function restyle_(sh) {
+  const head = head_(sh), C = reqCols_(head, sh.getName());
+  const bold = SpreadsheetApp.newTextStyle().setBold(true).setForegroundColor('#ffffff').setFontSize(10).build();
+  const small = SpreadsheetApp.newTextStyle().setBold(false).setItalic(true).setForegroundColor('#f3eefa').setFontSize(8).build();
+  head.forEach(function (h, i) {
+    let title = h, hint = '', bg = '#2e2566';
+    if (LOOK.CLIENT[h] !== undefined) { title = '✍️ ' + h; hint = LOOK.CLIENT[h]; bg = '#c2477a'; }
+    else if (LOOK.AUTO[h] !== undefined) { title = '🤖 ' + h; hint = LOOK.AUTO[h]; bg = h === 'Статус' ? '#2e2566' : '#6b6580'; }
+    else if (LOOK.LANG[h]) { hint = LOOK.LANG[h][0]; bg = LOOK.LANG[h][1]; }
+    else return;
+    const text = title + '\n' + hint;
+    const rt = SpreadsheetApp.newRichTextValue().setText(text)
+      .setTextStyle(0, title.length, bold).setTextStyle(title.length + 1, text.length, small).build();
+    sh.getRange(1, i + 1).setRichTextValue(rt).setBackground(bg).setWrap(true).setVerticalAlignment('middle');
+  });
+  sh.setRowHeight(1, 44);
+  const n = sh.getMaxRows() - 1;
+  // Старые статусы без иконок → с иконками.
+  if (sh.getLastRow() >= 2) {
+    const rng = sh.getRange(2, C.status + 1, sh.getLastRow() - 1, 1);
+    const vals = rng.getValues();
+    let ch = false;
+    vals.forEach(function (r) { const p = stPlain_(r[0]); if (p && CFG.ST_LABEL[p] && r[0] !== CFG.ST_LABEL[p]) { r[0] = CFG.ST_LABEL[p]; ch = true; } });
+    if (ch) rng.setValues(vals);
+  }
+  const labels = Object.keys(CFG.ST_LABEL).map(function (k) { return CFG.ST_LABEL[k]; });
+  sh.getRange(2, C.status + 1, n, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(labels, true).setAllowInvalid(true).build());
+  // Цвета: статус, розовый ID у новых, серый текст у закрытых строк.
+  const col = function (c) { return sh.getRange(2, c + 1, n, 1).getA1Notation().replace(/\d+/g, ''); };
+  const sc = col(C.status).split(':')[0];
+  const rules = [];
+  Object.keys(LOOK.ST).forEach(function (st) {
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$' + sc + '2="' + CFG.ST_LABEL[st] + '"')
+      .setBackground(LOOK.ST[st][0]).setFontColor(LOOK.ST[st][1]).setBold(true).setRanges([sh.getRange(2, C.status + 1, n, 1)]).build());
+  });
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$' + sc + '2="' + CFG.ST_LABEL['Новый'] + '"')
+    .setBackground('#ffd3e2').setFontColor('#a1204f').setBold(true).setRanges([sh.getRange(2, C.id + 1, n, 1)]).build());
+  const grayRanges = [sh.getRange(2, C.id + 2, n, C.status - C.id - 1), sh.getRange(2, C.match + 1, n, 1)];
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=OR($' + sc + '2="' + CFG.ST_LABEL['Отдан'] + '",$' + sc + '2="' + CFG.ST_LABEL['Отменён'] + '")')
+    .setFontColor('#8c8a94').setRanges(grayRanges).build());
+  sh.setConditionalFormatRules(rules);
 }
 
 function token_() {
@@ -636,6 +748,15 @@ function token_() {
   let t = props.getProperty(CFG.TOKEN_PROP);
   if (!t) { t = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''); props.setProperty(CFG.TOKEN_PROP, t); }
   return t;
+}
+
+function showLegend() {
+  SpreadsheetApp.getUi().alert('Как читать таблицу',
+    'Заголовки:\n✍️ розовые — заполняет заказчик\n🤖 серые — заполняются сами\nцветные KK, UZ… — переводы\n\n' +
+    'Статусы:\n🆕 Новый — ждёт разбора\n♻️ Из архива — перевод взят из архива, заказывать не нужно\n⚠️ Проверить — из архива, но отличаются цифры или знаки\n' +
+    '📤 У подрядчика — отдан на перевод\n✅ Готово — переводы на месте\n📨 Отдан — отдан заказчику\n✖️ Отменён\n\n' +
+    'Ячейки переводов:\n🟩 зелёная — из архива, можно брать\n🟨 жёлтая — из архива, проверить число / знаки\n🟥 красная — длиннее лимита',
+    SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function showToken() {
@@ -652,6 +773,8 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   if (p.token !== token_()) return json_({ error: 'нет доступа' });
   if (p.action === 'list') return json_(listForExtension_());
+  if (p.action === 'stats') return json_(collectStats_());
+  if (p.action === 'search') return json_(searchArchive_(p.q));
   return json_({ ok: true });
 }
 
@@ -659,20 +782,27 @@ function doPost(e) {
   let body = {};
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ error: 'плохой запрос' }); }
   if (body.token !== token_()) return json_({ error: 'нет доступа' });
+  if (body.action === 'search') return json_(searchArchive_(body.q));
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(20000)) return json_({ error: 'таблица занята, попробуйте ещё раз' });
   try {
     // Переводы из Smartcat, присланные расширением: сначала apply=false (что куда встанет), потом apply=true.
     if (body.action === 'smartcat') return json_({ report: smartcatImport(body.units || [], !!body.apply) });
-    const at = rowById_(body.id);
-    if (!at) return json_({ error: 'не нашла ' + body.id });
-    if (body.action === 'match') matchRows_(at.sh, [at.row], true);
-    else if (body.action === 'status') {
-      const C = reqCols_(head_(at.sh), at.sh.getName());
-      if (Object.keys(CFG.ST).map(function (k) { return CFG.ST[k]; }).indexOf(body.status) === -1) return json_({ error: 'нет такого статуса' });
-      at.sh.getRange(at.row, C.status + 1).setValue(body.status);
-      if (body.status === CFG.ST.SENT || body.status === CFG.ST.DONE) archiveRows_(at.sh, [at.row]);
+    if (body.action === 'archive') { archiveDone(); return json_(listForExtension_()); }
+    const ids = body.ids || [body.id];
+    if (body.action === 'status' && Object.keys(CFG.ST).map(function (k) { return CFG.ST[k]; }).indexOf(body.status) === -1) return json_({ error: 'нет такого статуса' });
+    const byTab = {};   // проверка по архиву — одним заходом на вкладку
+    for (let k = 0; k < ids.length; k++) {
+      const at = rowById_(ids[k]);
+      if (!at) return json_({ error: 'не нашла ' + ids[k] });
+      if (body.action === 'match') (byTab[at.sh.getName()] = byTab[at.sh.getName()] || { sh: at.sh, rows: [] }).rows.push(at.row);
+      else if (body.action === 'status') {
+        const C = reqCols_(head_(at.sh), at.sh.getName());
+        at.sh.getRange(at.row, C.status + 1).setValue(stLabel_(body.status));
+        if (body.status === CFG.ST.SENT || body.status === CFG.ST.DONE) archiveRows_(at.sh, [at.row]);
+      }
     }
+    Object.keys(byTab).forEach(function (n) { matchRows_(byTab[n].sh, byTab[n].rows, true); });
     return json_(listForExtension_());
   } finally {
     lock.releaseLock();
@@ -705,7 +835,7 @@ function listForExtension_() {
     const bgs = sh.getRange(2, 1, sh.getLastRow() - 1, head.length).getBackgrounds();
     vals.forEach(function (r, i) {
       if (!String(r[C.ru]).trim() || !String(r[C.id]).trim()) return;
-      const st = String(r[C.status] || CFG.ST.NEW);
+      const st = stPlain_(r[C.status]) || CFG.ST.NEW;
       counts[st] = (counts[st] || 0) + 1;
       if ([CFG.ST.SENT, CFG.ST.CANCEL].indexOf(st) !== -1) return;
       const tr = {};
@@ -720,6 +850,7 @@ function listForExtension_() {
         langs: parseLangs_(C.langs !== -1 ? r[C.langs] : ''), limit: C.limit !== -1 ? limitOf_(r[C.limit]) : 0,
         date: fmt(r[C.date], 'dd.MM'), sort: r[C.date] instanceof Date ? r[C.date].getTime() : 0,
         deadline: C.deadline !== -1 ? fmt(r[C.deadline], 'dd.MM HH:mm') : '',
+        dl: C.deadline !== -1 && r[C.deadline] instanceof Date ? r[C.deadline].getTime() : 0,
         link: C.link !== -1 ? String(r[C.link] || '') : '', ru: String(r[C.ru]), match: String(r[C.match] || ''), tr: tr,
       });
     });

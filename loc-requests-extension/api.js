@@ -10,6 +10,12 @@ const API = {
     const r = await fetch(s.url + '?action=list&token=' + encodeURIComponent(s.token), { redirect: 'follow' });
     return API.read(r);
   },
+  async get(action, params) {
+    const s = await API.settings();
+    if (!s.url || !s.token) throw new Error('Расширение не подключено к таблице');
+    const q = new URLSearchParams(Object.assign({ action, token: s.token }, params || {}));
+    return API.read(await fetch(s.url + '?' + q, { redirect: 'follow' }));
+  },
   async post(body) {
     const s = await API.settings();
     if (!s.url || !s.token) throw new Error('Расширение не подключено к таблице');
