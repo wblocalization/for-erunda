@@ -4,6 +4,22 @@ importScripts('api.js');
 const NEW = ['Новый', 'Из архива'];          // о таких новых строках — уведомление
 const ICON = chrome.runtime.getURL('icons/icon128.png');
 
+// Показывает уведомление. Если браузер не смог загрузить картинку — пробует ещё раз с картинкой, вшитой в текст.
+async function notify(id, opts) {
+  const make = o => new Promise(res => chrome.notifications.create(id, o, nid => res(chrome.runtime.lastError ? chrome.runtime.lastError.message : '')));
+  let err = await make(Object.assign({ type: 'basic', iconUrl: ICON }, opts));
+  if (err) err = await make(Object.assign({ type: 'basic', iconUrl: await iconData() }, opts));
+  await chrome.storage.local.set({ notifyError: err || '' });
+  return err;
+}
+
+async function iconData() {
+  const buf = new Uint8Array(await (await fetch(ICON)).arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+  return 'data:image/png;base64,' + btoa(bin);
+}
+
 async function poll() {
   let data;
   try { data = await API.list(); }
@@ -26,15 +42,15 @@ async function poll() {
   const fresh = data.items.filter(i => !seen.has(i.id) && NEW.indexOf(i.status) !== -1);
   fresh.slice(0, 5).forEach(i => {
     const reuse = /^♻️/.test(i.match) ? ' · ♻️ есть в архиве' : '';
-    chrome.notifications.create('req:' + i.id, {
-      type: 'basic', iconUrl: ICON, priority: 1,
+    notify('req:' + i.id, {
+      priority: 1,
       title: 'Новый запрос: ' + [i.product, (i.type || '').toLowerCase()].filter(Boolean).join(' · ') + reuse,
       message: i.ru.slice(0, 180),
       contextMessage: [i.langs.length ? i.langs.join(', ') : '', i.deadline ? 'до ' + i.deadline : ''].filter(Boolean).join(' · '),
     });
   });
   if (fresh.length > 5) {
-    chrome.notifications.create('req:more', { type: 'basic', iconUrl: ICON, title: 'Ещё новых запросов: ' + (fresh.length - 5), message: 'Откройте окошко расширения' });
+    notify('req:more', { title: 'Ещё новых запросов: ' + (fresh.length - 5), message: 'Откройте окошко расширения' });
   }
   await chrome.storage.local.set({ seen: Array.from(new Set(st.seen.concat(ids))).slice(-3000), data });
 }
@@ -48,7 +64,13 @@ chrome.runtime.onInstalled.addListener(() => { schedule(); poll(); });
 chrome.runtime.onStartup.addListener(() => { schedule(); poll(); });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'poll') poll(); });
 chrome.storage.onChanged.addListener((ch, area) => { if (area === 'sync' && (ch.url || ch.token || ch.every)) { schedule(); poll(); } });
-chrome.runtime.onMessage.addListener((m, sender, reply) => { if (m === 'poll') { poll().then(() => reply(true)); return true; } });
+chrome.runtime.onMessage.addListener((m, sender, reply) => {
+  if (m === 'poll') { poll().then(() => reply(true)); return true; }
+  if (m === 'test-notify') {
+    notify('test', { title: '🔔 Уведомления работают', message: 'Так будет выглядеть новый запрос из таблицы.' }).then(err => reply(err));
+    return true;
+  }
+});
 
 // Клик по уведомлению — открыть окошко расширения (или таблицу, если браузер не умеет).
 chrome.notifications.onClicked.addListener(async id => {

@@ -178,6 +178,16 @@ $('save').onclick = async () => {
     setTimeout(() => { $('back').click(); render(); }, 900);
   } catch (e) { $('smsg').textContent = '❌ ' + e.message; }
 };
+$('testn').onclick = () => {
+  $('smsg').textContent = 'Отправляю тестовое уведомление…';
+  chrome.runtime.sendMessage('test-notify', err => {
+    $('smsg').textContent = err
+      ? '❌ Браузер не показал уведомление: ' + err
+      : '✅ Отправила. Не видно в углу экрана? Значит, уведомления браузеру запрещены в системе:\n' +
+        '• Windows: Параметры → Система → Уведомления → включить для вашего браузера; выключить «Не беспокоить».\n' +
+        '• Mac: Системные настройки → Уведомления → ваш браузер → разрешить.';
+  });
+};
 $('refresh').onclick = () => load();
 
 load(true);
