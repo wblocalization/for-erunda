@@ -46,6 +46,11 @@ const ZS_CFG = {
 
 function zsSetup() {
   const ss = SpreadsheetApp.getActive();
+  // Запустили не из таблицы, а в отдельном проекте моста — там нужен zsBridgeSetup.
+  if (!ss) {
+    if (typeof zsBridgeSetup === 'function') { Logger.log('Это проект моста — запускаю zsBridgeSetup вместо zsSetup.'); return zsBridgeSetup(); }
+    throw new Error('zsSetup запускается из таблицы: «Расширения» → «Apps Script» внутри таблицы Зары.');
+  }
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (['zsOnOpen', 'zsOnEdit'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
   });
