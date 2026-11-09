@@ -23,8 +23,20 @@ function zsBridgeSetup() {
   props.setProperty('ZS_SHEET_ID', m[1]);
   let t = props.getProperty('ZS_TOKEN');
   if (!t) { t = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''); props.setProperty('ZS_TOKEN', t); }
-  const name = SpreadsheetApp.openById(m[1]).getName();
-  Logger.log('Мост подключён к таблице «' + name + '».\nКлюч для расширения:\n' + t);
+  Logger.log('Ключ для расширения:\n' + t);
+  // Проверяем, что таблица открывается. Если нет — говорим почему, ключ всё равно уже сохранён.
+  let ss;
+  try { ss = SpreadsheetApp.openById(m[1]); }
+  catch (e) {
+    Logger.log('⚠️ Не открылась таблица: ' + (e && e.message || e) + '\n' +
+      'Проверьте: 1) ссылка ведёт на Google Таблицу (рядом с названием нет значка .XLSX); ' +
+      '2) у этого аккаунта есть доступ к таблице; 3) в браузере открыт только один Google-аккаунт (или откройте script.google.com в режиме инкогнито).');
+    return;
+  }
+  const P = zsSheet_(ZS_CFG.PUSH), B = zsSheet_(ZS_CFG.BANNER);
+  Logger.log('✅ Мост подключён к таблице «' + ss.getName() + '».\n' +
+    'Пуши: ' + (P ? '«' + P.getName() + '», строк ' + P.getLastRow() : 'лист не найден') + '\n' +
+    'Баннеры: ' + (B ? '«' + B.getName() + '», строк ' + B.getLastRow() : 'лист не найден'));
 }
 
 function zsToken_() { return PropertiesService.getScriptProperties().getProperty('ZS_TOKEN') || ''; }
