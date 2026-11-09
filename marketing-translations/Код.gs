@@ -141,20 +141,26 @@ function kNum_(s) { return kEmoji_(s).replace(/\d+/g, '#'); }
 function emojis_(s) { return String(s || '').match(/(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}][\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}]*)+/gu) || []; }
 function numbers_(s) { return String(s || '').match(/\d+(?:[ .,]\d+)*/g) || []; }
 
-function ratio_(a, b) {
+// Похожесть строк 0..1 (Левенштейн). maxShare — если отличий заведомо больше этой доли, бросаем считать.
+function ratio_(a, b, maxShare) {
   if (a === b) return 1;
   if (!a || !b) return 0;
-  const m = a.length, n = b.length;
+  const m = a.length, n = b.length, big = Math.max(m, n);
+  const limit = maxShare ? Math.ceil(big * maxShare) : big;
+  if (Math.abs(m - n) > limit) return 0;
   let prev = new Array(n + 1), cur = new Array(n + 1);
   for (let j = 0; j <= n; j++) prev[j] = j;
   for (let i = 1; i <= m; i++) {
     cur[0] = i;
+    let rowMin = cur[0];
     for (let j = 1; j <= n; j++) {
       cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1));
+      if (cur[j] < rowMin) rowMin = cur[j];
     }
+    if (rowMin > limit) return 0;                 // дальше будет только хуже
     const t = prev; prev = cur; cur = t;
   }
-  return 1 - prev[n] / Math.max(m, n);
+  return 1 - prev[n] / big;
 }
 
 // Переносит эмодзи нового текста в старый перевод: старые эмодзи по порядку меняются на новые.
@@ -222,7 +228,9 @@ function loadArchive_(skip) {
       if (Object.keys(tr).length) list.push({ src: 'архив' + (srcCol !== -1 && r[srcCol] ? ': ' + String(r[srcCol]).slice(0, 40) : ''), ru: r[ru], tr: tr });
     });
   }
+  // Ключи и указатели: точные совпадения ищутся мгновенно, без перебора всего архива.
   list.forEach(function (x) { x.k1 = kSpace_(x.ru); x.k2 = kEmoji_(x.ru); x.k3 = kNum_(x.ru); });
+  indexArchive_(list);
   return list;
 }
 
@@ -236,21 +244,9 @@ function loadArchive_(skip) {
  */
 function findInArchive_(ru, langs, arc) {
   const k1 = kSpace_(ru), k2 = kEmoji_(ru), k3 = kNum_(ru);
-  const rank = { exact: 0, emoji: 1, punct: 2, num: 3, fuzzy: 4 };
+  const rank = { exact: 0, emoji: 1, punct: 2, num: 3 };
   const per = {};
-  let fuzzy = null;
-  arc.forEach(function (x) {
-    let level = null;
-    if (x.k1 === k1) level = 'exact';
-    else if (x.k2 === k2) level = emojis_(x.ru).join('') !== emojis_(ru).join('') && kSpace_(String(x.ru).replace(EMOJI_RE, '')) === kSpace_(String(ru).replace(EMOJI_RE, '')) ? 'emoji' : 'punct';
-    else if (x.k3 === k3) level = 'num';
-    if (!level) {
-      if (!fuzzy && Math.abs(x.k2.length - k2.length) <= 0.1 * Math.max(k2.length, 1) && k2.length > 8) {
-        const r = ratio_(x.k2, k2);
-        if (r >= CFG.FUZZY) fuzzy = { src: x.src, ru: x.ru, score: Math.round(r * 100) };
-      }
-      return;
-    }
+  const take = function (x, level) {
     langs.forEach(function (l) {
       if (!x.tr[l]) return;
       if (per[l] && rank[per[l].level] <= rank[level]) return;
@@ -263,9 +259,42 @@ function findInArchive_(ru, langs, arc) {
       }
       per[l] = { level: level, text: text, src: x.src, ru: x.ru };
     });
+  };
+  const idx = arc.idx || indexArchive_(arc);
+  (idx.k1[k1] || []).forEach(function (x) { take(x, 'exact'); });
+  (idx.k2[k2] || []).forEach(function (x) {
+    if (x.k1 === k1) return;
+    take(x, emojis_(x.ru).join('') !== emojis_(ru).join('') && kSpace_(String(x.ru).replace(EMOJI_RE, '')) === kSpace_(String(ru).replace(EMOJI_RE, '')) ? 'emoji' : 'punct');
   });
+  (idx.k3[k3] || []).forEach(function (x) { if (x.k2 !== k2) take(x, 'num'); });
+
+  // «Почти такой же» — только если ничего точнее не нашлось, и только среди текстов с общими словами.
+  let fuzzy = null;
+  if (!Object.keys(per).length && k2.length > 8) {
+    const words = wordsOf_(k2);
+    const need = Math.max(1, Math.ceil(words.length * 0.6));
+    for (let i = 0; i < arc.length && !fuzzy; i++) {
+      const x = arc[i];
+      if (Math.abs(x.k2.length - k2.length) > 0.1 * k2.length) continue;
+      if (!x.words) x.words = wordsOf_(x.k2);
+      let common = 0;
+      for (let w = 0; w < words.length; w++) if (x.words.indexOf(words[w]) !== -1) common++;
+      if (common < need) continue;
+      const r = ratio_(x.k2, k2, 1 - CFG.FUZZY);
+      if (r >= CFG.FUZZY) fuzzy = { src: x.src, ru: x.ru, score: Math.round(r * 100) };
+    }
+  }
   return { per: per, fuzzy: fuzzy };
 }
+
+function indexArchive_(list) {
+  const idx = { k1: {}, k2: {}, k3: {} };
+  list.forEach(function (x) { ['k1', 'k2', 'k3'].forEach(function (k) { (idx[k][x[k]] = idx[k][x[k]] || []).push(x); }); });
+  list.idx = idx;
+  return idx;
+}
+
+function wordsOf_(k) { return k.split(' ').filter(function (w) { return w.length >= 3; }); }
 
 const LEVEL_WORDS = { exact: 'тот же текст', emoji: 'отличается только эмодзи', punct: 'отличаются знаки — проверь', num: 'отличаются цифры — проверь число' };
 
