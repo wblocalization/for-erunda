@@ -32,21 +32,33 @@ const ZS_CFG = {
 
 function zsSetup() {
   const ss = SpreadsheetApp.getActive();
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'zsOnOpen') ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (['zsOnOpen', 'zsOnEdit'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
+  });
   ScriptApp.newTrigger('zsOnOpen').forSpreadsheet(ss).onOpen().create();
+  ScriptApp.newTrigger('zsOnEdit').forSpreadsheet(ss).onEdit().create();
   zsOnOpen();
-  SpreadsheetApp.getUi().alert('Готово! Меню «📊 Статистика» появилось сверху. Отчёт строится из листов пушей и баннеров — таблица не меняется.');
+  SpreadsheetApp.getUi().alert('Готово!\n\n• Меню «📊 Статистика» — отчёт по таблице.\n' +
+    '• Когда в «Пуши» или «Баннеры» вписывают текст RU, я ищу его в архиве и подставляю готовые переводы в ПУСТЫЕ ячейки нужных языков ' +
+    '(зелёные — тот же текст или другие эмодзи, жёлтые — другие цифры или знаки, проверить). Откуда взят перевод — в заметке.\n' +
+    '• Ничего уже заполненного я не меняю.');
 }
 
 function zsOnOpen() {
   SpreadsheetApp.getUi().createMenu('📊 Статистика')
     .addItem('Открыть отчёт', 'zsShow')
     .addItem('Пересчитать заново', 'zsShowFresh')
+    .addSeparator()
+    .addItem('♻️ Проверить выделенные строки по архиву', 'zsCheckSelected')
     .addToUi();
 }
 
 function zsShow() { zsOpen_(); }
-function zsShowFresh() { CacheService.getDocumentCache().remove('zs_stats'); zsOpen_(); }
+function zsShowFresh() { zsBump_(); zsOpen_(); }
+
+// Метка свежести: меняется — и все сохранённые подсчёты считаются устаревшими.
+function zsStamp_() { return PropertiesService.getDocumentProperties().getProperty('zs_fresh') || '0'; }
+function zsBump_() { PropertiesService.getDocumentProperties().setProperty('zs_fresh', String(Date.now())); }
 
 function zsOpen_() {
   const html = HtmlService.createHtmlOutputFromFile('StatsReport').setWidth(1180).setHeight(820);
@@ -55,13 +67,24 @@ function zsOpen_() {
 
 /* ---------- данные для страницы ---------- */
 
-function zsGetData() {
+// from, to — 'ГГГГ-ММ-ДД' включительно. Без них — текущий месяц.
+function zsGetData(from, to) {
+  const per = zsPeriod_(from, to);
+  const key = 'zs_stats_' + zsStamp_() + '_' + per.from + '_' + per.to;
   const cache = CacheService.getDocumentCache();
-  const hit = cache.get('zs_stats');
+  const hit = cache.get(key);
   if (hit) return JSON.parse(hit);
-  const out = zsBuild_();
-  try { cache.put('zs_stats', JSON.stringify(out), ZS_CFG.CACHE_MIN * 60); } catch (e) { /* больше 100 КБ — без кэша */ }
+  const out = zsBuild_(per.from, per.to);
+  try { cache.put(key, JSON.stringify(out), ZS_CFG.CACHE_MIN * 60); } catch (e) { /* больше 100 КБ — без кэша */ }
   return out;
+}
+
+function zsPeriod_(from, to) {
+  const ok = function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')); };
+  if (ok(from) && ok(to)) return from <= to ? { from: from, to: to } : { from: to, to: from };
+  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone(), now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1), last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { from: Utilities.formatDate(first, tz, 'yyyy-MM-dd'), to: Utilities.formatDate(last, tz, 'yyyy-MM-dd') };
 }
 
 function zsSheet_(prefix) {
@@ -173,9 +196,9 @@ function zsCostRate_() {
   return { rate: words ? Math.round(cost / words * 100) / 100 : 0, cost: Math.round(cost), words: Math.round(words), orders: orders };
 }
 
-function zsBuild_() {
+// Вся история с отметкой повторов (повтор считается относительно всех более ранних дней).
+function zsAnalyze_() {
   const rows = zsReadRows_();
-  if (!rows.length) return { empty: true };
   const LEVEL = ['exact', 'emoji', 'punct', 'num', 'fuzzy'];
   const idx = { k1: {}, k2: {}, k3: {} };
   const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
@@ -212,10 +235,29 @@ function zsBuild_() {
     ['k1', 'k2', 'k3'].forEach(function (k) { (idx[k][x[k]] = idx[k][x[k]] || []).push(x); });
   });
 
-  const months = {}, lang = {}, prod = {}, btype = {}, levels = {}, lvlWords = {};
+  return rows;
+}
+
+function zsBuild_(from, to) {
+  const all = zsAnalyze_();
+  if (!all.length) return { empty: true };
+  const LEVEL = ['exact', 'emoji', 'punct', 'num', 'fuzzy'];
+  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const fmtD = function (d) { return Utilities.formatDate(d, tz, 'dd.MM.yyyy'); };
+  const f = function (d) { return d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4); };
+  const rows = all.filter(function (x) { return x.day >= from && x.day <= to; });
+  // шаг графика: до двух месяцев — по дням, дольше — по месяцам
+  const span = (new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 864e5 + 1;
+  const step = span <= 62 ? 'day' : 'month';
+  const months = {};
+  if (step === 'day') {
+    for (let d = new Date(from + 'T12:00:00'); Utilities.formatDate(d, tz, 'yyyy-MM-dd') <= to; d.setDate(d.getDate() + 1))
+      months[Utilities.formatDate(d, tz, 'yyyy-MM-dd')] = { push: 0, banner: 0, words: 0, rep: 0, rep_words: 0 };
+  }
+  const lang = {}, prod = {}, btype = {}, levels = {}, lvlWords = {};
   let allWords = 0, repCount = 0, repWords = 0, push = 0, banner = 0;
   rows.forEach(function (x) {
-    const mk = x.day.slice(0, 7);
+    const mk = step === 'day' ? x.day : x.day.slice(0, 7);
     const m = months[mk] = months[mk] || { push: 0, banner: 0, words: 0, rep: 0, rep_words: 0 };
     m[x.type]++; if (x.type === 'push') push++; else banner++;
     m.words += x.w * x.langs.length; allWords += x.w * x.langs.length;
@@ -230,9 +272,11 @@ function zsBuild_() {
     }
   });
 
-  // чаще всего заказывали заново: один и тот же текст в разные дни
+  // чаще всего заказывали заново: тексты периода, которые заказывали в разные дни (за всю историю)
+  const inPeriod = {};
+  rows.forEach(function (x) { inPeriod[x.k2] = true; });
   const grp = {};
-  rows.forEach(function (x) { (grp[x.k2] = grp[x.k2] || []).push(x); });
+  all.forEach(function (x) { if (inPeriod[x.k2]) (grp[x.k2] = grp[x.k2] || []).push(x); });
   const top = Object.keys(grp).map(function (k) {
     const g = grp[k], days = {};
     g.forEach(function (x) { days[x.day] = true; });
@@ -242,7 +286,6 @@ function zsBuild_() {
     return { g: g, n: ds.length, w: g.reduce(function (s, x) { return s + x.w; }, 0), first: ds[0], last: ds[ds.length - 1],
       langs: ZS_CFG.LANGS.filter(function (l) { return langsU[l]; }) };
   }).filter(function (t) { return t.n > 1; }).sort(function (a, b) { return b.n - a.n || b.w - a.w; }).slice(0, 12).map(function (t) {
-    const f = function (d) { return d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4); };
     return { ru: t.g[t.g.length - 1].ru.slice(0, 140), times: t.n, first: f(t.first), last: f(t.last), langs: t.langs };
   });
 
@@ -258,10 +301,288 @@ function zsBuild_() {
   const cr = zsCostRate_();
   return {
     generated: Utilities.formatDate(new Date(), tz, 'dd.MM.yyyy HH:mm'),
-    range: [fmtD(rows[0].date), fmtD(rows[rows.length - 1].date)],
+    range: [f(from), f(to)], period: { from: from, to: to }, step: step,
+    data_range: [all[0].day, all[all.length - 1].day],
     total: rows.length, push: push, banner: banner, all_words: allWords,
     rep_count: repCount, rep_words: repWords, fuzzy_count: levels.fuzzy || 0, lvl_words: lvlWords, rate: cr.rate,
     levels: levels, months: mo, lang: sortObj(lang), prod: sortObj(prod), btype: sortObj(btype),
     top: top, examples: examples, paid: { cost: cr.cost, words: cr.words, orders: cr.orders },
   };
+}
+
+
+/* ============================================================================
+ * ♻️ Подстановка из архива, когда заказчик вписывает текст
+ * Пишет ТОЛЬКО в пустые ячейки переводов той строки, где вписали текст RU или языки.
+ * ========================================================================== */
+
+const ZS_FILL = { GREEN: '#d9f2e3', YELLOW: '#fff1c9', MAX_ROWS: 60 };
+const ZS_LEVEL_WORDS = { exact: 'тот же текст', emoji: 'отличаются только эмодзи', punct: 'отличаются знаки — проверь', num: 'отличаются цифры — проверь число' };
+
+// Раскладка листов старой таблицы (номера колонок с 1).
+function zsLayout_(sh) {
+  const n = sh.getName();
+  if (n.indexOf(ZS_CFG.PUSH) === 0) return { kind: 'пуш', date: 1, langs: 3, ru: 6, tr: { KK: 7, KY: 8, UZ: 9, HY: 10, TG: 11, KA: 12, AZ: 13 }, width: 13 };
+  if (n.indexOf(ZS_CFG.BANNER) === 0) return { kind: 'баннер', date: 1, langs: 3, ru: 7, tr: { KK: 8, KY: 9, UZ: 10, HY: 11, TG: 12, KA: 13, AZ: 14, EN: 15 }, width: 15 };
+  return null;
+}
+
+function zsEmojiList_(s) { return String(s || '').match(/(?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}][\u{FE0F}\u{200D}\u{1F3FB}-\u{1F3FF}]*)+/gu) || []; }
+function zsNumbers_(s) { return String(s || '').match(/\d+(?:[ .,]\d+)*/g) || []; }
+
+// Переносит эмодзи нового текста в старый перевод: старые эмодзи по порядку меняются на новые.
+function zsSwapEmoji_(oldSrc, newSrc, tr) {
+  const a = zsEmojiList_(oldSrc), b = zsEmojiList_(newSrc);
+  let out = String(tr);
+  if (a.join('') === b.join('')) return out;
+  if (a.length && a.length === b.length) {
+    a.forEach(function (e, i) { out = out.replace(e, '\u0000' + i + '\u0000'); });
+    b.forEach(function (e, i) { out = out.replace('\u0000' + i + '\u0000', e); });
+    return out;
+  }
+  // Количество разное: убираем старые и ставим новые туда же, где они в новом тексте (начало / конец).
+  a.forEach(function (e) { out = out.replace(e, ''); });
+  out = out.replace(/[ \t]{2,}/g, ' ').replace(/^[ \t]+|[ \t]+$/gm, '');
+  const lead = String(newSrc).trim().match(/^((?:[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}][\u{FE0F}\u{200D}]*\s*)+)/u);
+  const tail = String(newSrc).trim().match(/((?:\s*[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}][\u{FE0F}\u{200D}]*)+)$/u);
+  if (lead) out = lead[1] + out;
+  if (tail && (!lead || tail[1].trim() !== lead[1].trim())) out = out + tail[1];
+  return out;
+}
+
+// Меняет в переводе числа старого исходника на числа нового (по порядку).
+function zsSwapNumbers_(oldSrc, newSrc, tr) {
+  const a = zsNumbers_(oldSrc), b = zsNumbers_(newSrc);
+  if (a.length !== b.length) return null;
+  let out = String(tr);
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === b[i]) continue;
+    if (out.indexOf(a[i]) === -1) return null;
+    out = out.replace(a[i], '\u0000' + i + '\u0000');
+  }
+  for (let i = 0; i < b.length; i++) out = out.replace('\u0000' + i + '\u0000', b[i]);
+  return out;
+}
+
+
+
+// Архив: все строки пушей и баннеров с переводами + «Репозиторий». skip — строки, которые сейчас проверяем.
+function zsArchive_(skip) {
+  const list = [];
+  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].forEach(function (sh) {
+    if (!sh || sh.getLastRow() < 2) return;
+    const L = zsLayout_(sh);
+    let lastDate = null;
+    sh.getRange(2, 1, sh.getLastRow() - 1, L.width).getValues().forEach(function (r, i) {
+      if (r[L.date - 1] instanceof Date) lastDate = r[L.date - 1];
+      if (skip && skip[sh.getName() + '#' + (i + 2)]) return;
+      const ru = zs_s(r[L.ru - 1]);
+      if (!ru || ru.toUpperCase().indexOf('ПРИМЕР') === 0) return;
+      const tr = {};
+      Object.keys(L.tr).forEach(function (l) { const v = zs_s(r[L.tr[l] - 1]); if (v) tr[l] = v; });
+      if (!Object.keys(tr).length || zs_sample(Object.keys(tr).map(function (k) { return tr[k]; }))) return;
+      list.push({ src: L.kind + (lastDate ? ' от ' + Utilities.formatDate(lastDate, tz, 'dd.MM.yyyy') : '') + ' (строка ' + (i + 2) + ')', ru: ru, tr: tr, t: lastDate ? lastDate.getTime() : 0 });
+    });
+  });
+  const R = zsSheet_('Репозиторий');
+  if (R && R.getLastRow() > 1) {
+    let file = '';
+    R.getRange(2, 1, R.getLastRow() - 1, 9).getValues().forEach(function (r) {
+      if (zs_s(r[0])) file = zs_s(r[0]);
+      const ru = zs_s(r[1]);
+      if (!ru) return;
+      const tr = {};
+      ['KK', 'KY', 'UZ', 'HY', 'TG', 'KA', 'AZ'].forEach(function (l, j) { const v = zs_s(r[2 + j]); if (v) tr[l] = v; });
+      if (Object.keys(tr).length) list.push({ src: 'репозиторий' + (file ? ': ' + file.slice(0, 40) : ''), ru: ru, tr: tr, t: 0 });
+    });
+  }
+  // свежие — первыми: при равном совпадении берём последний перевод
+  list.sort(function (a, b) { return b.t - a.t; });
+  const idx = { k1: {}, k2: {}, k3: {} };
+  list.forEach(function (x) {
+    x.k1 = zs_k1(x.ru); x.k2 = zs_k2(x.ru); x.k3 = zs_k3(x.ru);
+    ['k1', 'k2', 'k3'].forEach(function (k) { (idx[k][x[k]] = idx[k][x[k]] || []).push(x); });
+  });
+  list.idx = idx;
+  return list;
+}
+
+function zsFind_(ru, langs, arc) {
+  const k1 = zs_k1(ru), k2 = zs_k2(ru), k3 = zs_k3(ru);
+  const rank = { exact: 0, emoji: 1, punct: 2, num: 3 };
+  const per = {};
+  const take = function (x, level) {
+    langs.forEach(function (l) {
+      if (!x.tr[l] || (per[l] && rank[per[l].level] <= rank[level])) return;
+      let text = x.tr[l];
+      if (level === 'emoji' || level === 'punct') text = zsSwapEmoji_(x.ru, ru, text);
+      if (level === 'num') { const sw = zsSwapNumbers_(x.ru, ru, zsSwapEmoji_(x.ru, ru, text)); if (sw === null) return; text = sw; }
+      per[l] = { level: level, text: text, src: x.src, ru: x.ru };
+    });
+  };
+  (arc.idx.k1[k1] || []).forEach(function (x) { take(x, 'exact'); });
+  (arc.idx.k2[k2] || []).forEach(function (x) {
+    if (x.k1 === k1) return;
+    take(x, zs_emos(x.ru) !== zs_emos(ru) && zs_k1(x.ru.replace(ZS_EMO, '')) === zs_k1(ru.replace(ZS_EMO, '')) ? 'emoji' : 'punct');
+  });
+  (arc.idx.k3[k3] || []).forEach(function (x) { if (x.k2 !== k2) take(x, 'num'); });
+  let fuzzy = null;
+  if (!Object.keys(per).length && k2.length > 8) {
+    const words = k2.split(' ').filter(function (w) { return w.length >= 3; });
+    const need = Math.max(1, Math.ceil(words.length * 0.6));
+    for (let i = 0; i < arc.length && !fuzzy; i++) {
+      const x = arc[i];
+      if (Math.abs(x.k2.length - k2.length) > 0.1 * k2.length) continue;
+      if (!x.ws) x.ws = x.k2.split(' ').filter(function (w) { return w.length >= 3; });
+      let common = 0;
+      for (let w = 0; w < words.length; w++) if (x.ws.indexOf(words[w]) !== -1) common++;
+      if (common < need) continue;
+      const r = zs_ratio(x.k2, k2, 1 - ZS_CFG.FUZZY);
+      if (r >= ZS_CFG.FUZZY) fuzzy = { src: x.src, ru: x.ru, score: Math.round(r * 100) };
+    }
+  }
+  return { per: per, fuzzy: fuzzy };
+}
+
+// Языки строки: свои или от строки с датой выше (в старой таблице так продолжают запрос).
+function zsRowLangs_(sh, L, row, own) {
+  if (zs_s(own)) return zs_langs(own);
+  const from = Math.max(2, row - 40);
+  const vals = sh.getRange(from, 1, row - from + 1, L.langs).getValues();
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (zs_s(vals[i][L.langs - 1])) return zs_langs(vals[i][L.langs - 1]);
+    if (vals[i][L.date - 1] instanceof Date) break;
+  }
+  return [];
+}
+
+function zsCheckRows_(sh, rows) {
+  const L = zsLayout_(sh);
+  if (!L) return { rows: 0, filled: 0, check: 0, fuzzy: 0 };
+  const skip = {};
+  rows.forEach(function (r) { skip[sh.getName() + '#' + r] = true; });
+  const arc = zsArchive_(skip);
+  const res = { rows: 0, filled: 0, check: 0, fuzzy: 0 };
+  rows.forEach(function (rn) {
+    const rng = sh.getRange(rn, 1, 1, L.width);
+    const v = rng.getValues()[0];
+    const ru = zs_s(v[L.ru - 1]);
+    if (!ru || ru.toUpperCase().indexOf('ПРИМЕР') === 0) return;
+    const want = zsRowLangs_(sh, L, rn, v[L.langs - 1]).filter(function (l) { return L.tr[l]; });
+    if (!want.length) return;
+    res.rows++;
+    const found = zsFind_(ru, want, arc);
+    const filled = [], check = [], missing = [];
+    let first = null;
+    want.forEach(function (l) {
+      const col = L.tr[l];
+      if (zs_s(v[col - 1])) return;                 // уже есть перевод — не трогаем
+      const p = found.per[l];
+      if (!p) { missing.push(l); return; }
+      const warn = p.level === 'num' || p.level === 'punct';
+      const cell = sh.getRange(rn, col);
+      cell.setValue(p.text).setBackground(warn ? ZS_FILL.YELLOW : ZS_FILL.GREEN)
+        .setNote('♻️ Из архива (' + p.src + '): ' + ZS_LEVEL_WORDS[p.level] + '\nИсходник там: ' + p.ru);
+      (warn ? check : filled).push(l);
+      if (!first || (warn && first.level !== 'num')) first = p;
+    });
+    res.filled += filled.length + check.length;
+    res.check += check.length;
+    // Заметка на тексте RU — только если там нет чужой заметки.
+    const ruCell = sh.getRange(rn, L.ru);
+    const oldNote = ruCell.getNote();
+    if (oldNote && !/^(♻️|🔎)/.test(oldNote)) return;
+    let note = '';
+    if (first) {
+      note = '♻️ Уже переводили: ' + first.src + ' · ' + ZS_LEVEL_WORDS[first.level] + '\nПодставлено: ' + filled.concat(check).join(', ');
+      if (check.length) note += '\nПроверить: ' + check.join(', ');
+      if (missing.length) note += '\nНет в архиве: ' + missing.join(', ');
+    } else if (found.fuzzy) {
+      note = '🔎 Похоже на ' + found.fuzzy.src + ' (' + found.fuzzy.score + '%):\n«' + found.fuzzy.ru.slice(0, 160) + '»\nПроверьте — может, перевод можно взять оттуда.';
+      res.fuzzy++;
+    }
+    if (note !== oldNote) ruCell.setNote(note);
+  });
+  if (res.filled || res.fuzzy) zsBump_();
+  return res;
+}
+
+// Триггер на правку: реагируем только на текст RU и колонку языков в листах пушей и баннеров.
+function zsOnEdit(e) {
+  if (!e || !e.range) return;
+  const sh = e.range.getSheet(), L = zsLayout_(sh);
+  if (!L || e.range.getLastRow() < 2) return;
+  const c1 = e.range.getColumn(), c2 = e.range.getLastColumn();
+  const hits = function (c) { return c >= c1 && c <= c2; };
+  if (!hits(L.ru) && !hits(L.langs)) return;
+  const rows = [];
+  for (let r = Math.max(2, e.range.getRow()); r <= e.range.getLastRow() && rows.length < ZS_FILL.MAX_ROWS; r++) rows.push(r);
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(15000)) return;
+  try { zsCheckRows_(sh, rows); } finally { lock.releaseLock(); }
+}
+
+// Меню: проверить выделенные строки вручную.
+function zsCheckSelected() {
+  const sh = SpreadsheetApp.getActiveSheet();
+  if (!zsLayout_(sh)) { SpreadsheetApp.getUi().alert('Откройте лист «Заказы на перевод пушей» или «…баннеров» и выделите строки.'); return; }
+  const rows = [];
+  sh.getActiveRangeList().getRanges().forEach(function (r) {
+    for (let i = Math.max(2, r.getRow()); i <= r.getLastRow() && rows.length < 300; i++) if (rows.indexOf(i) === -1) rows.push(i);
+  });
+  const res = zsCheckRows_(sh, rows);
+  SpreadsheetApp.getActive().toast('Проверено строк: ' + res.rows + '. Подставлено переводов: ' + res.filled + (res.check ? ' (проверить: ' + res.check + ')' : '') +
+    (res.fuzzy ? '. Похожих подсказок: ' + res.fuzzy : '') + '. Заполненные ячейки не трогала.', '♻️ Архив', 8);
+}
+
+
+/* ============================================================================
+ * ⬇️ Выгрузка статистики за период — в НОВУЮ отдельную Google Таблицу (рабочая таблица не меняется)
+ * ========================================================================== */
+function zsExport(from, to) {
+  const per = zsPeriod_(from, to);
+  const d = zsBuild_(per.from, per.to);
+  if (d.empty) throw new Error('Нет данных');
+  const all = zsAnalyze_().filter(function (x) { return x.day >= per.from && x.day <= per.to; });
+  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const LN = { KK: 'Казахский', KY: 'Кыргызский', UZ: 'Узбекский', HY: 'Армянский', TG: 'Таджикский', KA: 'Грузинский', AZ: 'Азербайджанский', EN: 'Английский' };
+  const LV = { exact: 'тот же текст', emoji: 'только эмодзи', punct: 'знаки', num: 'цифры', fuzzy: 'похоже 90%+' };
+  const out = SpreadsheetApp.create('Статистика переводов ' + d.range[0] + '–' + d.range[1]);
+  const put = function (name, rows, widths) {
+    let sh = out.getSheets()[0];
+    if (sh.getName() !== 'Лист1' && sh.getName() !== 'Sheet1' || sh.getLastRow() > 0) sh = out.insertSheet(name); else sh.setName(name);
+    if (!rows.length) return;
+    sh.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    sh.getRange(1, 1, 1, rows[0].length).setFontWeight('bold').setBackground('#2e2566').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+    (widths || []).forEach(function (w, i) { sh.setColumnWidth(i + 1, w); });
+  };
+  const saved = Math.round(d.rep_words * d.rate);
+  put('Итоги', [
+    ['Показатель', 'Значение'],
+    ['Период', d.range[0] + ' – ' + d.range[1]],
+    ['Запросов', d.total], ['Пуши', d.push], ['Баннеры', d.banner],
+    ['Слов к переводу (слова × языки)', d.all_words],
+    ['Заказали повторно (уже переводили)', d.rep_count],
+    ['Слов в повторах', d.rep_words],
+    ['Ставка за слово, ₽ (без НДС, по сметам)', d.rate],
+    ['Можно было не платить, ₽ (оценка)', saved],
+    ['Похожих на 90%+ (не в сумме)', d.fuzzy_count],
+    ['Выгружено', Utilities.formatDate(new Date(), tz, 'dd.MM.yyyy HH:mm')],
+  ], [320, 200]);
+  const tbl = function (o, h, label) { return [h].concat(Object.keys(o).map(function (k) { return [label ? label(k) : k, o[k]]; })); };
+  put('Языки', tbl(d.lang, ['Язык', 'Запросов'], function (k) { return LN[k] || k; }), [200, 120]);
+  put('Продукты', tbl(d.prod, ['Продукт', 'Запросов']), [200, 120]);
+  if (Object.keys(d.btype).length) put('Типы баннеров', tbl(d.btype, ['Тип баннера', 'Запросов']), [200, 120]);
+  put(d.step === 'day' ? 'По дням' : 'По месяцам', [[d.step === 'day' ? 'День' : 'Месяц', 'Пуши', 'Баннеры', 'Слов к переводу', 'Повторов', 'Слов в повторах']].concat(
+    Object.keys(d.months).map(function (k) { const m = d.months[k]; return [k, m.push, m.banner, m.words, m.rep, m.rep_words]; })), [120, 80, 80, 140, 100, 140]);
+  put('Повторы', [['Дата', 'Тип', 'Текст RU', 'Совпадение', 'Уже было', 'Текст тогда', 'Можно было взять']].concat(
+    all.filter(function (x) { return x.rep; }).map(function (x) {
+      return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.ru, LV[x.rep.level], x.rep.prev, x.rep.prev_ru, x.rep.covered.join(', ')];
+    })), [100, 70, 360, 120, 100, 360, 160]);
+  put('Все запросы', [['Дата', 'Тип', 'Продукт', 'Языки', 'Текст RU', 'Слов', 'Повтор']].concat(
+    all.map(function (x) { return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, x.langs.join(', '), x.ru, x.w, x.rep ? LV[x.rep.level] : '']; })),
+    [100, 70, 120, 200, 420, 60, 120]);
+  return { url: out.getUrl(), name: out.getName() };
 }

@@ -83,6 +83,18 @@ svg .lbl{fill:var(--ink2);font-weight:600}
 .theme{position:fixed;right:16px;top:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 12px;font:600 13px var(--f);cursor:pointer}
 .loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:var(--bg);color:var(--ink2);font-size:17px;font-weight:600;z-index:20}
 .loading[hidden]{display:none}
+.period{display:flex;flex-direction:column;gap:12px;margin-bottom:16px;padding:14px 16px}
+.presets{display:flex;gap:6px;flex-wrap:wrap}
+.presets button,.range button,.range input{font:600 13.5px var(--f);border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;cursor:pointer}
+.presets button.on{background:var(--navy);border-color:var(--navy);color:var(--card)}
+.range{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;color:var(--ink2)}
+.range label{display:flex;gap:6px;align-items:center}
+.range input{border-radius:10px;padding:6px 10px;font-weight:500}
+.range .go{background:var(--accent);border-color:var(--accent);color:#fff}
+.range .exp{margin-left:auto}
+.range button:disabled{opacity:.5;cursor:default}
+.expres{font-size:13.5px;color:var(--ink2)}.expres:empty{display:none}
+.expres a{color:var(--accent);font-weight:700}
 footer{color:var(--mute);font-size:13px;margin-top:36px;line-height:1.6}
 @media (max-width:860px){.kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.levels{grid-template-columns:1fr 1fr}}
 @media (max-width:520px){header{padding-right:0;padding-top:56px}.hbar{grid-template-columns:100px 1fr 52px}.pair{grid-template-columns:1fr}.pair .arrow{transform:rotate(90deg)}}
@@ -98,11 +110,24 @@ footer{color:var(--mute);font-size:13px;margin-top:36px;line-height:1.6}
     <div class="sub" id="range"></div>
   </header>
 
+  <div class="period card">
+    <div class="presets" id="presets">
+      <button data-p="month" class="on">Этот месяц</button><button data-p="prev">Прошлый месяц</button>
+      <button data-p="3m">3 месяца</button><button data-p="year">Этот год</button><button data-p="all">Всё время</button>
+    </div>
+    <div class="range">
+      <label>с <input type="date" id="from"></label><label>по <input type="date" id="to"></label>
+      <button class="go" id="go">Показать</button>
+      <button class="exp" id="exp">⬇️ Выгрузить в таблицу</button>
+    </div>
+    <div class="expres" id="expres"></div>
+  </div>
+
   <div class="kpis" id="kpis"></div>
 
   <section>
-    <h2>Запросы по месяцам</h2>
-    <p class="lead">Сколько текстов приходило на перевод. Наведите на столбик — покажу цифры. Последний месяц неполный.</p>
+    <h2>Запросы <span class="stepword">по месяцам</span></h2>
+    <p class="lead">Сколько текстов приходило на перевод. Наведите на столбик — покажу цифры.</p>
     <div class="card">
       <div class="legend"><span><i style="background:var(--s1)"></i>Пуши</span><span><i style="background:var(--s2)"></i>Баннеры</span></div>
       <div id="months"></div>
@@ -122,7 +147,7 @@ footer{color:var(--mute);font-size:13px;margin-top:36px;line-height:1.6}
   </section>
 
   <section class="card">
-    <h2>Доля повторов по месяцам</h2>
+    <h2>Доля повторов <span class="stepword">по месяцам</span></h2>
     <p class="lead">Сколько процентов запросов месяца уже переводили раньше (без «похожих»)</p>
     <div id="repmonths"></div>
   </section>
@@ -165,16 +190,22 @@ const LV = {
   fuzzy: ['Похоже на 90%+', 'не в сумме — проверять глазами', 'hint'],
 };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const mlabel = (k, full) => { const [y, m] = k.split('-'); return (full ? MONTHS_F : MONTHS)[+m - 1] + (full ? ' ' + y : ''); };
+const MONTHS_G = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const mlabel = (k, full) => {
+  const [y, m, d] = k.split('-');
+  if (d) return full ? (+d) + ' ' + MONTHS_G[+m - 1] + ' ' + y : String(+d);
+  return (full ? MONTHS_F : MONTHS)[+m - 1] + (full ? ' ' + y : '');
+};
 
 $('range').textContent = 'Пуши и баннеры с ' + D.range[0] + ' по ' + D.range[1] + ' · обновлено ' + D.generated;
+document.querySelectorAll('.stepword').forEach(e => e.textContent = D.step === 'day' ? 'по дням' : 'по месяцам');
 
-const repShare = D.rep_count / D.total * 100;
+const repShare = D.total ? D.rep_count / D.total * 100 : 0;
 const saved = D.rep_words * D.rate;
 $('kpis').innerHTML = [
   ['Запросов на перевод', fmt(D.total), 'пуши ' + fmt(D.push) + ' · баннеры ' + fmt(D.banner)],
   ['Слов к переводу', fmt(D.all_words), 'слова текста × число языков'],
-  ['Заказали повторно', fmt(D.rep_count), repShare.toFixed(1).replace('.', ',') + '% запросов уже переводили раньше · ещё ' + D.fuzzy_count + ' похожих'],
+  ['Заказали повторно', fmt(D.rep_count), repShare.toFixed(1).replace('.', ',') + '% запросов уже переводили раньше' + (D.fuzzy_count ? ' · ещё ' + D.fuzzy_count + ' похожих' : '')],
   ['Можно было не платить', '≈ ' + fmt(saved / 1000) + ' тыс ₽', fmt(D.rep_words) + ' слов × ' + String(D.rate).replace('.', ',') + ' ₽ (ставка без НДС)', 'hot'],
 ].map(k => '<div class="kpi ' + (k[3] || '') + '"><div class="l">' + k[0] + '</div><div class="v">' + k[1] + '</div><div class="h">' + k[2] + '</div></div>').join('');
 
@@ -203,7 +234,8 @@ function monthsChart(el, rows, opts) {
       base += p.v;
     });
     s += '<rect x="' + (x - 6) + '" y="' + padT + '" width="' + (bw + 12) + '" height="' + (H - padB - padT) + '" fill="transparent" data-tip="' + esc(r.tip) + '"/>';
-    s += '<text x="' + (x + bw / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + r.label + '</text>';
+    const every = n > 40 ? 5 : n > 20 ? 3 : n > 12 ? 2 : 1;
+    if (i % every === 0 || i === n - 1) s += '<text x="' + (x + bw / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + r.label + '</text>';
   });
   el.innerHTML = s + '</svg>';
 }
@@ -222,7 +254,8 @@ monthsChart($('repmonths'), mk.map(k => { const m = D.months[k], t = m.push + m.
   tip: mlabel(k, true) + '\nповторов: ' + m.rep + ' из ' + t + ' (' + p.toFixed(1).replace('.', ',') + '%)\nслов в повторах: ' + fmt(m.rep_words) + '\n≈ ' + fmt(m.rep_words * D.rate) + ' ₽' }; }), { aria: 'Доля повторов по месяцам', pct: true, h: 220 });
 }
 drawCharts();
-let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 150); });
+if (!window.__rz) { window.__rz = true; let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => window.__draw && window.__draw(), 150); }); }
+window.__draw = drawCharts;
 
 function hbars(el, obj, label, top) {
   let keys = Object.keys(obj).sort((a, b) => obj[b] - obj[a]);
@@ -251,21 +284,53 @@ $('method').innerHTML = '• Запрос — одна строка с текс�
   '• Сравнение: регистр, «ё/е» и лишние пробелы не важны; отдельно — отличаются только эмодзи, знаки, цифры; «похоже» — совпадает на 90%+ по буквам.<br>' +
   '• Ставка ' + String(D.rate).replace('.', ',') + ' ₽ за слово — средняя по ' + D.paid.orders + ' сметам из листа «Анализ переводов» (' + fmt(D.paid.cost) + ' ₽ без НДС за ' + fmt(D.paid.words) + ' слов). ' +
   'Если подрядчик даёт скидку на повторы через память переводов, реальная переплата меньше — цифра показывает масштаб.';
-$('foot').textContent = 'Посчитано из этой таблицы ' + D.generated + '. Пересчитать заново — меню «📊 Статистика → Пересчитать заново».';
+$('foot').textContent = 'Посчитано из этой таблицы ' + D.generated + '. Если только что добавили строки — меню «📊 Статистика → Пересчитать заново».';
 
 }
 /* загрузка из таблицы */
-function load(fresh) {
+let FROM = '', TO = '';
+function load(from, to) {
   $('loading').hidden = false;
+  $('loading').textContent = '📊 Считаю статистику по таблице…';
   if (!(window.google && google.script && google.script.run)) { $('loading').textContent = 'Откройте отчёт из таблицы: меню «📊 Статистика».'; return; }
   google.script.run.withSuccessHandler(function (data) {
     $('loading').hidden = true;
     if (!data || data.empty) { $('loading').hidden = false; $('loading').textContent = 'В таблице пока нет запросов с датой и текстом RU.'; return; }
-    D = data; start();
+    D = data; FROM = D.period.from; TO = D.period.to;
+    $('from').value = FROM; $('to').value = TO;
+    start();
   }).withFailureHandler(function (e) {
     $('loading').textContent = 'Не получилось посчитать: ' + (e && e.message ? e.message : e);
-  }).zsGetData();
+  }).zsGetData(from || '', to || '');
 }
+
+/* период */
+const iso = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+function preset(p) {
+  const n = new Date(), y = n.getFullYear(), m = n.getMonth();
+  if (p === 'month') return [iso(new Date(y, m, 1)), iso(new Date(y, m + 1, 0))];
+  if (p === 'prev') return [iso(new Date(y, m - 1, 1)), iso(new Date(y, m, 0))];
+  if (p === '3m') return [iso(new Date(y, m - 2, 1)), iso(new Date(y, m + 1, 0))];
+  if (p === 'year') return [iso(new Date(y, 0, 1)), iso(new Date(y, 11, 31))];
+  return D ? D.data_range : [iso(new Date(y - 5, 0, 1)), iso(n)];
+}
+$('presets').onclick = e => {
+  const b = e.target.closest('button[data-p]'); if (!b) return;
+  document.querySelectorAll('#presets button').forEach(x => x.classList.toggle('on', x === b));
+  const [f, t] = preset(b.dataset.p); $('expres').textContent = ''; load(f, t);
+};
+$('go').onclick = () => {
+  if (!$('from').value || !$('to').value) return;
+  document.querySelectorAll('#presets button').forEach(x => x.classList.remove('on'));
+  $('expres').textContent = ''; load($('from').value, $('to').value);
+};
+$('exp').onclick = () => {
+  const b = $('exp'); b.disabled = true; $('expres').textContent = 'Выгружаю в новую Google Таблицу… это 10–30 секунд';
+  google.script.run.withSuccessHandler(function (r) {
+    b.disabled = false;
+    $('expres').innerHTML = '✅ Готово: <a href="' + r.url + '" target="_blank" rel="noopener">' + r.name.replace(/[<>&]/g, '') + '</a> — лежит у вас на Google Диске. Листы: итоги, языки, продукты, по дням/месяцам, повторы, все запросы.';
+  }).withFailureHandler(function (e) { b.disabled = false; $('expres').textContent = 'Не получилось выгрузить: ' + (e && e.message ? e.message : e); }).zsExport(FROM, TO);
+};
 load();
 /* подсказки */
 document.addEventListener('mousemove', e => {
