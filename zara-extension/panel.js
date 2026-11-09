@@ -348,7 +348,7 @@ $('save').onclick = async () => {
   try {
     const d = await API.list();
     $('smsg').textContent = '✅ Подключено! Ждут перевода: ' + d.counts.wait;
-    await chrome.storage.local.set({ data: d, seen: d.items.map(i => i.id + ':' + i.ru.slice(0, 40)) });
+    await chrome.storage.local.set({ data: d, seen2: d.items.map(i => i.sheet + ':' + i.ru.replace(/\s+/g, ' ').trim().slice(0, 80)) });
     DATA = d;
     setTimeout(() => { show('req'); render(); }, 900);
   } catch (e) { $('smsg').textContent = '❌ ' + e.message; }

@@ -35,12 +35,15 @@ async function poll() {
   chrome.action.setBadgeBackgroundColor({ color: '#e5638f' });
   chrome.action.setTitle({ title: 'Маркетинг: пуши и баннеры: новых без статуса ' + waiting });
 
-  const st = await chrome.storage.local.get({ seen: null });
-  const key = i => i.id + ':' + i.ru.slice(0, 40);   // строка + начало текста: если строку перезаписали — это новый запрос
+  // «Видели» — по типу и тексту, а не по номеру строки: строки сдвигаются, когда в таблице что-то вставляют или сортируют.
+  // seen2 — новый формат; при переходе на него первый опрос молча запоминает всё, что уже есть.
+  const st = await chrome.storage.local.get({ seen2: null });
+  const key = i => i.sheet + ':' + i.ru.replace(/\s+/g, ' ').trim().slice(0, 80);
   const ids = data.items.map(key);
-  if (st.seen === null) { await chrome.storage.local.set({ seen: ids, data }); return; }   // первый запуск: без шквала уведомлений
-  const seen = new Set(st.seen);
-  const fresh = data.items.filter(i => !seen.has(key(i)));
+  if (st.seen2 === null) { await chrome.storage.local.set({ seen2: ids, seen: null, data }); return; }
+  const seen = new Set(st.seen2);
+  // Уведомляем только про действительно новые: без перевода, без статуса и с датой не старше двух дней.
+  const fresh = data.items.filter(i => !seen.has(key(i)) && i.missing.length && !i.status && (!i.t || Date.now() - i.t < 2 * 864e5));
   fresh.slice(0, 5).forEach(i => {
     const reuse = /^♻️/.test(i.note) ? ' · ♻️ подставлено из архива' : /^🔎/.test(i.note) ? ' · 🔎 похожий уже был' : '';
     notify('req:' + i.id, {
@@ -53,7 +56,7 @@ async function poll() {
   if (fresh.length > 5) {
     notify('req:more', { title: 'Ещё новых запросов: ' + (fresh.length - 5), message: 'Откройте панель расширения' });
   }
-  await chrome.storage.local.set({ seen: Array.from(new Set(st.seen.concat(ids))).slice(-3000), data });
+  await chrome.storage.local.set({ seen2: Array.from(new Set(st.seen2.concat(ids))).slice(-5000), data });
 }
 
 async function schedule() {
