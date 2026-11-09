@@ -8,7 +8,7 @@ const TABS = [
   { st: 'Новый', name: 'Новые', cls: 'st-new', hint: 'Новые запросы. Нет в архиве — отдайте подрядчику.' },
   { st: 'Из архива', name: 'Из архива', cls: 'st-arc', hint: 'Перевод подставлен из архива — можно сразу отдавать заказчику.' },
   { st: 'Проверить', name: 'Проверить', cls: 'st-chk', hint: 'Подставлено из архива, но отличаются цифры или знаки — проверьте и отдайте.' },
-  { st: 'У подрядчика', name: 'У подрядчика', cls: 'st-ven', hint: 'Ждём переводы. Загрузите zip из Smartcat во вкладке «📥 Smartcat».' },
+  { st: 'У подрядчика', name: 'У подрядчика', cls: 'st-ven', hint: 'Ждём переводы. Пришли файлы .xliff — загрузите их во вкладке «📥 Файлы».' },
   { st: 'Готово', name: 'Готово', cls: 'st-done', hint: 'Переводы на месте — отдайте заказчику.' },
 ];
 const ST_CLS = Object.fromEntries(TABS.map(t => [t.st, t.cls]));
@@ -262,7 +262,7 @@ document.addEventListener('mousemove', e => {
   tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px';
 });
 
-/* ---------- загрузка из Smartcat ---------- */
+/* ---------- загрузка файлов от подрядчика (.xliff, по одному или в zip) ---------- */
 
 $('drop').onclick = () => $('file').click();
 $('file').onchange = e => readFiles(e.target.files);

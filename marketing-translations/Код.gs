@@ -6,7 +6,7 @@
  *  - ищет текст в архиве и подставляет готовые переводы
  *    (тот же текст / другой эмодзи — зелёным, другие цифры или знаки — жёлтым);
  *  - подсвечивает переводы длиннее лимита;
- *  - загружает переводы из Smartcat (zip / xliff) в нужные строки;
+ *  - загружает переводы от подрядчиков (файлы .xliff или zip с ними) в нужные строки;
  *  - строит статистику;
  *  - отдаёт данные расширению (doGet / doPost с ключом).
  * Всё работает и без расширения — через меню «🌍 Переводы».
@@ -42,7 +42,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('🌍 Переводы')
     .addItem('♻️ Проверить по архиву: выделенные строки', 'matchSelected')
     .addItem('♻️ Проверить по архиву: все новые', 'matchAllNew')
-    .addItem('📥 Загрузить переводы из Smartcat…', 'showSmartcatDialog')
+    .addItem('📥 Загрузить переводы от подрядчика (xliff / zip)…', 'showSmartcatDialog')
     .addSeparator()
     .addItem('📤 Выделенные → «У подрядчика»', 'markVendor')
     .addItem('📨 Выделенные → «Отдан»', 'markSent')
@@ -490,11 +490,11 @@ function archiveRows_(sh, rowNums) {
   return out.length;
 }
 
-/* ---------- загрузка из Smartcat ---------- */
+/* ---------- загрузка переводов от подрядчика (.xliff из Smartcat подрядчика, по одному или в zip) ---------- */
 
 function showSmartcatDialog() {
   const html = HtmlService.createHtmlOutputFromFile('Smartcat').setWidth(760).setHeight(560);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Загрузить переводы из Smartcat');
+  SpreadsheetApp.getUi().showModalDialog(html, 'Загрузить переводы от подрядчика');
 }
 
 const SC_LANG = { kk: 'KK', ky: 'KY', uz: 'UZ', hy: 'HY', tg: 'TG', ka: 'KA', az: 'AZ', en: 'EN' };
@@ -502,6 +502,14 @@ const SC_LANG = { kk: 'KK', ky: 'KY', uz: 'UZ', hy: 'HY', tg: 'TG', ka: 'KA', az
 // units: [{file, lang: 'uz-Latn', src, tgt, max}]. apply=false — только показать, что куда встанет.
 // push_… ищется на вкладке пушей, banner_… — на вкладке баннеров (не нашлось — на другой).
 function smartcatImport(units, apply) {
+  // Один и тот же текст с тем же переводом может встретиться в файле дважды — считаем один раз.
+  const seenU = {};
+  units = (units || []).filter(function (u) {
+    const k = String(u.lang).toLowerCase() + '|' + kSpace_(u.src) + '|' + String(u.tgt).trim();
+    if (seenU[k]) return false;
+    seenU[k] = true;
+    return true;
+  });
   const tabs = reqSheets_().map(function (x) {
     const head = head_(x.sh), C = reqCols_(head, x.def.name);
     const n = Math.max(x.sh.getLastRow() - 1, 0);
@@ -786,7 +794,7 @@ function doPost(e) {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(20000)) return json_({ error: 'таблица занята, попробуйте ещё раз' });
   try {
-    // Переводы из Smartcat, присланные расширением: сначала apply=false (что куда встанет), потом apply=true.
+    // Переводы от подрядчика (xliff), присланные расширением: сначала apply=false (что куда встанет), потом apply=true.
     if (body.action === 'smartcat') return json_({ report: smartcatImport(body.units || [], !!body.apply) });
     if (body.action === 'archive') { archiveDone(); return json_(listForExtension_()); }
     const ids = body.ids || [body.id];

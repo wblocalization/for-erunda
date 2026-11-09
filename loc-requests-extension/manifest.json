@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Переводы маркетинга",
-  "version": "0.2.0",
-  "description": "Боковая панель к таблице переводов: новые запросы, поиск по архиву, статистика, загрузка переводов из Smartcat.",
+  "version": "0.2.1",
+  "description": "Боковая панель к таблице переводов: новые запросы, поиск по архиву, статистика, загрузка переводов от подрядчиков (.xliff).",
   "permissions": ["storage", "alarms", "notifications", "sidePanel"],
   "host_permissions": ["https://script.google.com/*", "https://script.googleusercontent.com/*"],
   "background": { "service_worker": "background.js" },
