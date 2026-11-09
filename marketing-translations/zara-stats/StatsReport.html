@@ -102,7 +102,7 @@ footer{color:var(--mute);font-size:13px;margin-top:36px;line-height:1.6}
 </head>
 <body>
 <button class="theme" id="theme">◐ тема</button>
-<div class="loading" id="loading">📊 Считаю статистику по таблице… Первый раз — до минуты, дальше быстрее.</div>
+<div class="loading" id="loading">📊 Считается статистика по таблице… Первый раз — до минуты, дальше быстрее.</div>
 <div class="wrap">
   <header>
     <div class="eyebrow">Переводы маркетинга · отчёт</div>
@@ -127,7 +127,7 @@ footer{color:var(--mute);font-size:13px;margin-top:36px;line-height:1.6}
 
   <section>
     <h2>Запросы <span class="stepword">по месяцам</span></h2>
-    <p class="lead">Сколько текстов приходило на перевод. Наведите на столбик — покажу цифры.</p>
+    <p class="lead">Сколько текстов приходило на перевод. Наведите на столбик — появятся цифры.</p>
     <div class="card">
       <div class="legend"><span><i style="background:var(--s1)"></i>Пуши</span><span><i style="background:var(--s2)"></i>Баннеры</span></div>
       <div id="months"></div>
@@ -166,7 +166,7 @@ footer{color:var(--mute);font-size:13px;margin-top:36px;line-height:1.6}
 
   <section class="grid2">
     <div class="card"><h2>Какие баннеры</h2><p class="lead">Запросов по типу баннера</p><div id="btypes"></div></div>
-    <div class="card"><h2>Как считала</h2>
+    <div class="card"><h2>Как считалось</h2>
       <p class="note" id="method" style="margin-top:0"></p>
     </div>
   </section>
@@ -270,7 +270,7 @@ hbars($('btypes'), D.btype, null, 7);
 
 $('callout').innerHTML = '<b>' + fmt(D.rep_count) + ' из ' + fmt(D.total) + '</b> запросов (' + repShare.toFixed(1).replace('.', ',') + '%) уже переводили раньше. Это <b>' + fmt(D.rep_words) +
   ' слов</b> на всех языках — примерно <b>' + fmt(saved) + ' ₽</b> по средней ставке подрядчика. Зелёные ниже можно было брать из архива без проверки, жёлтые — с быстрой проверкой цифр и знаков. ' +
-  'Ещё <b>' + D.fuzzy_count + '</b> текстов похожи на 90%+ — их в сумму не включаю: «до» и «от» на глаз почти одинаковы, а смысл разный.';
+  'Ещё <b>' + D.fuzzy_count + '</b> текстов похожи на 90%+ — в сумму они не входят: «до» и «от» на глаз почти одинаковы, а смысл разный.';
 $('levels').innerHTML = Object.keys(LV).map(k => '<div class="lv ' + (k === 'fuzzy' ? '' : LV[k][2]) + '"><span>' + LV[k][0] + '</span><b>' + fmt(D.levels[k] || 0) + '</b><small>' + LV[k][1] +
   (D.lvl_words[k] ? ' · ' + fmt(D.lvl_words[k]) + ' слов' : '') + '</small></div>').join('');
 
@@ -291,7 +291,7 @@ $('foot').textContent = 'Посчитано из этой таблицы ' + D.g
 let FROM = '', TO = '';
 function load(from, to) {
   $('loading').hidden = false;
-  $('loading').textContent = '📊 Считаю статистику по таблице…';
+  $('loading').textContent = '📊 Считается статистика по таблице…';
   if (!(window.google && google.script && google.script.run)) { $('loading').textContent = 'Откройте отчёт из таблицы: меню «📊 Статистика».'; return; }
   zsRun('zsGetData', [from || '', to || ''], function (data) {
     $('loading').hidden = true;
@@ -332,7 +332,7 @@ $('go').onclick = () => {
   $('expres').textContent = ''; load($('from').value, $('to').value);
 };
 $('exp').onclick = () => {
-  const b = $('exp'); b.disabled = true; $('expres').textContent = 'Выгружаю в новую Google Таблицу… это 10–30 секунд';
+  const b = $('exp'); b.disabled = true; $('expres').textContent = '⏳ Выгрузка в новую Google Таблицу… обычно до минуты, не закрывайте страницу';
   zsRun('zsExport', [FROM, TO], function (r) {
     b.disabled = false;
     $('expres').innerHTML = '✅ Готово: <a href="' + r.url + '" target="_blank" rel="noopener">' + r.name.replace(/[<>&]/g, '') + '</a> — лежит у вас на Google Диске. Листы: итоги, языки, продукты, по дням/месяцам, повторы, все запросы.';

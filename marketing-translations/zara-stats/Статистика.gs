@@ -263,8 +263,8 @@ function zsAnalyze_() {
   return rows;
 }
 
-function zsBuild_(from, to) {
-  const all = zsAnalyze_();
+function zsBuild_(from, to, analyzed) {
+  const all = analyzed || zsAnalyze_();
   if (!all.length) return { empty: true };
   const LEVEL = ['exact', 'emoji', 'punct', 'num', 'fuzzy'];
   const tz = zsTz_();
@@ -648,9 +648,10 @@ function zsAddStatusColumn() {
  * ========================================================================== */
 function zsExport(from, to) {
   const per = zsPeriod_(from, to);
-  const d = zsBuild_(per.from, per.to);
+  const analyzed = zsAnalyze_();                      // один разбор на всё — так вдвое быстрее
+  const d = zsBuild_(per.from, per.to, analyzed);
   if (d.empty) throw new Error('Нет данных');
-  const all = zsAnalyze_().filter(function (x) { return x.day >= per.from && x.day <= per.to; });
+  const all = analyzed.filter(function (x) { return x.day >= per.from && x.day <= per.to; });
   const tz = zsTz_();
   const LN = { KK: 'Казахский', KY: 'Кыргызский', UZ: 'Узбекский', HY: 'Армянский', TG: 'Таджикский', KA: 'Грузинский', AZ: 'Азербайджанский', EN: 'Английский' };
   const LV = { exact: 'тот же текст', emoji: 'только эмодзи', punct: 'знаки', num: 'цифры', fuzzy: 'похоже 90%+' };
