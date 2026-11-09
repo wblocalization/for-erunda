@@ -112,9 +112,8 @@ function zsList_() {
   [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].forEach(function (sh) {
     if (!sh || sh.getLastRow() < 2) return;
     const L = zsLayout_(sh);
-    const last = sh.getLastRow(), from = Math.max(2, last - 400);
-    // языки и дату «продолжения» ищем выше окна, чтобы первые строки не остались без языков
-    const head = Math.max(2, from - 40);
+    // Читаем весь лист: внизу бывают одиночные строки далеко от остальных, поэтому «последние N строк» не годятся.
+    const last = sh.getLastRow(), from = 2, head = 2;
     const vals = sh.getRange(head, 1, last - head + 1, L.width).getValues();
     const notes = sh.getRange(head, L.ru, last - head + 1, 1).getNotes();
     let langs = '', date = null, product = '', btype = '';
@@ -139,7 +138,7 @@ function zsList_() {
       });
     });
   });
-  items.sort(function (a, b) { return a.t - b.t || (a.sheet < b.sheet ? -1 : a.row - b.row); });
+  items.sort(function (a, b) { return a.t - b.t || (a.sheet === b.sheet ? a.row - b.row : (a.sheet < b.sheet ? -1 : 1)); });
   const recent = items.slice(-300);
   return {
     updated: Utilities.formatDate(new Date(), tz, 'dd.MM HH:mm'),
