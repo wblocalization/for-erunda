@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Переводы Зары</title><link rel="stylesheet" href="panel.css"></head>
+<body>
+  <header>
+    <div class="ttl"><b>🌍 Переводы Зары</b><span id="sub">загрузка…</span></div>
+    <div class="hbtns">
+      <button id="sheet" title="Открыть таблицу">↗</button>
+      <button id="refresh" title="Обновить">⟳</button>
+      <button id="gear" title="Настройки">⚙</button>
+    </div>
+  </header>
+
+  <nav id="nav">
+    <button data-sec="req" class="on"><i>📋</i>Запросы<em id="navNew"></em></button>
+    <button data-sec="search"><i>🔎</i>Архив</button>
+    <button data-sec="stats"><i>📊</i>Статистика</button>
+    <button data-sec="sc"><i>📥</i>Файлы</button>
+  </nav>
+
+  <main>
+    <!-- Запросы -->
+    <section id="req">
+      <div class="tiles" id="tiles"></div>
+      <div class="tools">
+        <input id="q" type="search" placeholder="Поиск: текст, продукт, строка…">
+        <div class="seg" id="kind"><button data-k="" class="on">Все</button><button data-k="пуш">Пуши</button><button data-k="баннер">Баннеры</button></div>
+      </div>
+      <div class="hint" id="tabHint"></div>
+      <div id="bulk"></div>
+      <div id="list"></div>
+    </section>
+
+    <!-- Поиск по архиву -->
+    <section id="search" class="hidden">
+      <h2>Уже переводили?</h2>
+      <p class="lead">Вставьте текст — найду такой же или почти такой же (другие эмодзи, цифры, знаки) и покажу готовые переводы.</p>
+      <textarea id="sq" rows="3" placeholder="Например: Скидки до 70% на всё 🔥"></textarea>
+      <div class="row"><button class="p" id="sgo">Найти</button><span class="mute small">или Ctrl + Enter</span></div>
+      <div id="sres"></div>
+    </section>
+
+    <!-- Статистика -->
+    <section id="stats" class="hidden">
+      <div id="stbody"><div class="empty">Считаю…</div></div>
+    </section>
+
+    <!-- Файлы от подрядчика -->
+    <section id="sc" class="hidden">
+      <h2>Переводы от подрядчика</h2>
+      <p class="lead">Перетащите файлы .xliff, которые прислал подрядчик (например, banner_…ru-RU-ka.xliff), — можно сразу несколько или zip с ними. Сначала покажу, что куда попадёт, потом вставлю.</p>
+      <div class="drop" id="drop"><b>📥 Перетащите сюда</b><span>или нажмите, чтобы выбрать файлы</span>
+        <input type="file" id="file" multiple accept=".zip,.xliff,.xlf,.sdlxliff" hidden></div>
+      <div id="screp"></div>
+    </section>
+
+    <!-- Настройки -->
+    <section id="settings" class="hidden">
+      <h2>Подключение к таблице Зары</h2>
+      <label>Ссылка моста (веб-приложение, заканчивается на /exec)<input id="url" placeholder="https://script.google.com/macros/s/…/exec"></label>
+      <label>Ключ (из журнала выполнения zsBridgeSetup в мосте)<input id="token" type="password"></label>
+      <label>Проверять новые запросы каждые
+        <select id="every"><option value="1">1 минуту</option><option value="2">2 минуты</option><option value="5">5 минут</option><option value="15">15 минут</option></select></label>
+      <div class="row"><button class="p" id="save">Сохранить и проверить</button><button id="back">Назад</button></div>
+      <div class="row"><button id="testn">🔔 Проверить уведомление</button></div>
+      <p class="msg" id="smsg"></p>
+    </section>
+  </main>
+
+  <div class="tip" id="tip"></div>
+  <div class="toast" id="toast"></div>
+  <script src="jszip.min.js"></script>
+  <script src="api.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

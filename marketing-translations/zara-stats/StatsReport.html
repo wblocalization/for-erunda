@@ -293,15 +293,22 @@ function load(from, to) {
   $('loading').hidden = false;
   $('loading').textContent = '📊 Считаю статистику по таблице…';
   if (!(window.google && google.script && google.script.run)) { $('loading').textContent = 'Откройте отчёт из таблицы: меню «📊 Статистика».'; return; }
-  google.script.run.withSuccessHandler(function (data) {
+  zsRun('zsGetData', [from || '', to || ''], function (data) {
     $('loading').hidden = true;
     if (!data || data.empty) { $('loading').hidden = false; $('loading').textContent = 'В таблице пока нет запросов с датой и текстом RU.'; return; }
     D = data; FROM = D.period.from; TO = D.period.to;
     $('from').value = FROM; $('to').value = TO;
     start();
-  }).withFailureHandler(function (e) {
+  }, function (e) {
     $('loading').textContent = 'Не получилось посчитать: ' + (e && e.message ? e.message : e);
-  }).zsGetData(from || '', to || '');
+  });
+}
+
+// Вызов функции таблицы: из меню таблицы — напрямую, со страницы моста — с ключом.
+function zsRun(name, args, ok, fail) {
+  const r = google.script.run.withSuccessHandler(ok).withFailureHandler(fail);
+  if (window.ZS_TOKEN) r[name + 'T'].apply(r, [window.ZS_TOKEN].concat(args));
+  else r[name].apply(r, args);
 }
 
 /* период */
@@ -326,10 +333,10 @@ $('go').onclick = () => {
 };
 $('exp').onclick = () => {
   const b = $('exp'); b.disabled = true; $('expres').textContent = 'Выгружаю в новую Google Таблицу… это 10–30 секунд';
-  google.script.run.withSuccessHandler(function (r) {
+  zsRun('zsExport', [FROM, TO], function (r) {
     b.disabled = false;
     $('expres').innerHTML = '✅ Готово: <a href="' + r.url + '" target="_blank" rel="noopener">' + r.name.replace(/[<>&]/g, '') + '</a> — лежит у вас на Google Диске. Листы: итоги, языки, продукты, по дням/месяцам, повторы, все запросы.';
-  }).withFailureHandler(function (e) { b.disabled = false; $('expres').textContent = 'Не получилось выгрузить: ' + (e && e.message ? e.message : e); }).zsExport(FROM, TO);
+  }, function (e) { b.disabled = false; $('expres').textContent = 'Не получилось выгрузить: ' + (e && e.message ? e.message : e); });
 };
 load();
 /* подсказки */

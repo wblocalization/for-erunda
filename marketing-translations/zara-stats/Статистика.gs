@@ -16,6 +16,20 @@
  * Если в проекте уже есть свой onOpen — ничего страшного, меню добавится отдельным триггером.
  * ========================================================================== */
 
+// Таблица: открытая (скрипт внутри таблицы) или по ID (скрипт-мост для расширения).
+let ZS_SS_ = null;
+function zsSS_() {
+  if (ZS_SS_) return ZS_SS_;
+  const a = SpreadsheetApp.getActive();
+  if (a) return (ZS_SS_ = a);
+  const id = PropertiesService.getScriptProperties().getProperty('ZS_SHEET_ID');
+  if (!id) throw new Error('Мост не подключён к таблице: запустите zsBridgeSetup');
+  return (ZS_SS_ = SpreadsheetApp.openById(id));
+}
+function zsCache_() { return CacheService.getDocumentCache() || CacheService.getScriptCache(); }
+function zsProps_() { return PropertiesService.getDocumentProperties() || PropertiesService.getScriptProperties(); }
+function zsLock_() { return LockService.getDocumentLock() || LockService.getScriptLock(); }
+
 const ZS_CFG = {
   PUSH: 'Заказы на перевод пушей',        // начало названия листа
   BANNER: 'Заказы на перевод баннеров',
@@ -58,8 +72,8 @@ function zsShow() { zsOpen_(); }
 function zsShowFresh() { zsBump_(); zsOpen_(); }
 
 // Метка свежести: меняется — и все сохранённые подсчёты считаются устаревшими.
-function zsStamp_() { return PropertiesService.getDocumentProperties().getProperty('zs_fresh') || '0'; }
-function zsBump_() { PropertiesService.getDocumentProperties().setProperty('zs_fresh', String(Date.now())); }
+function zsStamp_() { return zsProps_().getProperty('zs_fresh') || '0'; }
+function zsBump_() { zsProps_().setProperty('zs_fresh', String(Date.now())); }
 
 function zsOpen_() {
   const html = HtmlService.createHtmlOutputFromFile('StatsReport').setWidth(1180).setHeight(820);
@@ -72,7 +86,7 @@ function zsOpen_() {
 function zsGetData(from, to) {
   const per = zsPeriod_(from, to);
   const key = 'zs_stats_' + zsStamp_() + '_' + per.from + '_' + per.to;
-  const cache = CacheService.getDocumentCache();
+  const cache = zsCache_();
   const hit = cache.get(key);
   if (hit) return JSON.parse(hit);
   const out = zsBuild_(per.from, per.to);
@@ -83,13 +97,13 @@ function zsGetData(from, to) {
 function zsPeriod_(from, to) {
   const ok = function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')); };
   if (ok(from) && ok(to)) return from <= to ? { from: from, to: to } : { from: to, to: from };
-  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone(), now = new Date();
+  const tz = zsSS_().getSpreadsheetTimeZone(), now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth(), 1), last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   return { from: Utilities.formatDate(first, tz, 'yyyy-MM-dd'), to: Utilities.formatDate(last, tz, 'yyyy-MM-dd') };
 }
 
 function zsSheet_(prefix) {
-  const list = SpreadsheetApp.getActive().getSheets();
+  const list = zsSS_().getSheets();
   for (let i = 0; i < list.length; i++) if (list[i].getName().indexOf(prefix) === 0) return list[i];
   return null;
 }
@@ -142,7 +156,7 @@ function zs_ratio(a, b, maxShare) {
   return 1 - prev[n] / big;
 }
 
-function zs_day(d) { return Utilities.formatDate(d, SpreadsheetApp.getActive().getSpreadsheetTimeZone(), 'yyyy-MM-dd'); }
+function zs_day(d) { return Utilities.formatDate(d, zsSS_().getSpreadsheetTimeZone(), 'yyyy-MM-dd'); }
 
 function zsReadRows_() {
   const rows = [];
@@ -202,7 +216,7 @@ function zsAnalyze_() {
   const rows = zsReadRows_();
   const LEVEL = ['exact', 'emoji', 'punct', 'num', 'fuzzy'];
   const idx = { k1: {}, k2: {}, k3: {} };
-  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const tz = zsSS_().getSpreadsheetTimeZone();
   const fmtD = function (d) { return Utilities.formatDate(d, tz, 'dd.MM.yyyy'); };
 
   rows.forEach(function (x, i) {
@@ -243,7 +257,7 @@ function zsBuild_(from, to) {
   const all = zsAnalyze_();
   if (!all.length) return { empty: true };
   const LEVEL = ['exact', 'emoji', 'punct', 'num', 'fuzzy'];
-  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const tz = zsSS_().getSpreadsheetTimeZone();
   const fmtD = function (d) { return Utilities.formatDate(d, tz, 'dd.MM.yyyy'); };
   const f = function (d) { return d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4); };
   const rows = all.filter(function (x) { return x.day >= from && x.day <= to; });
@@ -370,7 +384,7 @@ function zsSwapNumbers_(oldSrc, newSrc, tr) {
 // Архив: все строки пушей и баннеров с переводами + «Репозиторий». skip — строки, которые сейчас проверяем.
 function zsArchive_(skip) {
   const list = [];
-  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const tz = zsSS_().getSpreadsheetTimeZone();
   [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].forEach(function (sh) {
     if (!sh || sh.getLastRow() < 2) return;
     const L = zsLayout_(sh);
@@ -519,7 +533,7 @@ function zsOnEdit(e) {
   if (!hits(L.ru) && !hits(L.langs)) return;
   const rows = [];
   for (let r = Math.max(2, e.range.getRow()); r <= e.range.getLastRow() && rows.length < ZS_FILL.MAX_ROWS; r++) rows.push(r);
-  const lock = LockService.getDocumentLock();
+  const lock = zsLock_();
   if (!lock.tryLock(15000)) return;
   try { zsCheckRows_(sh, rows); } finally { lock.releaseLock(); }
 }
@@ -533,7 +547,7 @@ function zsCheckSelected() {
     for (let i = Math.max(2, r.getRow()); i <= r.getLastRow() && rows.length < 300; i++) if (rows.indexOf(i) === -1) rows.push(i);
   });
   const res = zsCheckRows_(sh, rows);
-  SpreadsheetApp.getActive().toast('Проверено строк: ' + res.rows + '. Подставлено переводов: ' + res.filled + (res.check ? ' (проверить: ' + res.check + ')' : '') +
+  zsSS_().toast('Проверено строк: ' + res.rows + '. Подставлено переводов: ' + res.filled + (res.check ? ' (проверить: ' + res.check + ')' : '') +
     (res.fuzzy ? '. Похожих подсказок: ' + res.fuzzy : '') + '. Заполненные ячейки не трогала.', '♻️ Архив', 8);
 }
 
@@ -546,7 +560,7 @@ function zsExport(from, to) {
   const d = zsBuild_(per.from, per.to);
   if (d.empty) throw new Error('Нет данных');
   const all = zsAnalyze_().filter(function (x) { return x.day >= per.from && x.day <= per.to; });
-  const tz = SpreadsheetApp.getActive().getSpreadsheetTimeZone();
+  const tz = zsSS_().getSpreadsheetTimeZone();
   const LN = { KK: 'Казахский', KY: 'Кыргызский', UZ: 'Узбекский', HY: 'Армянский', TG: 'Таджикский', KA: 'Грузинский', AZ: 'Азербайджанский', EN: 'Английский' };
   const LV = { exact: 'тот же текст', emoji: 'только эмодзи', punct: 'знаки', num: 'цифры', fuzzy: 'похоже 90%+' };
   const out = SpreadsheetApp.create('Статистика переводов ' + d.range[0] + '–' + d.range[1]);
@@ -603,7 +617,7 @@ const ZS_XLANG = { kk: 'KK', ky: 'KY', uz: 'UZ', hy: 'HY', tg: 'TG', ka: 'KA', a
 
 // units: [{file, lang: 'az-Latn', src, tgt}]. apply=false — только показать, что куда попадёт.
 function zsImport(units, apply) {
-  const lock = LockService.getDocumentLock();
+  const lock = zsLock_();
   if (apply && !lock.tryLock(20000)) throw new Error('Таблица занята, попробуйте ещё раз');
   try {
     const tabs = [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].filter(Boolean).map(function (sh) {
