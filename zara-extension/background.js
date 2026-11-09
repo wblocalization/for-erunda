@@ -26,14 +26,14 @@ async function poll() {
   catch (e) {
     chrome.action.setBadgeText({ text: '!' });
     chrome.action.setBadgeBackgroundColor({ color: '#9a8fb0' });
-    chrome.action.setTitle({ title: 'Переводы Зары: ' + e.message });
+    chrome.action.setTitle({ title: 'Маркетинг: пуши и баннеры: ' + e.message });
     return;
   }
   // На значке — сколько свежих запросов ждут перевода.
   const waiting = data.items.filter(i => i.missing.length && !i.status && (!i.t || Date.now() - i.t < FRESH)).length;
   chrome.action.setBadgeText({ text: waiting ? String(waiting) : '' });
   chrome.action.setBadgeBackgroundColor({ color: '#e5638f' });
-  chrome.action.setTitle({ title: 'Переводы Зары: новых без статуса ' + waiting });
+  chrome.action.setTitle({ title: 'Маркетинг: пуши и баннеры: новых без статуса ' + waiting });
 
   const st = await chrome.storage.local.get({ seen: null });
   const key = i => i.id + ':' + i.ru.slice(0, 40);   // строка + начало текста: если строку перезаписали — это новый запрос
@@ -75,7 +75,7 @@ chrome.storage.onChanged.addListener((ch, area) => { if (area === 'sync' && (ch.
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   if (m === 'poll') { poll().then(() => reply(true)); return true; }
   if (m === 'test-notify') {
-    notify('test', { title: '🔔 Уведомления работают', message: 'Так будет выглядеть новый запрос из таблицы Зары.' }).then(err => reply(err));
+    notify('test', { title: '🔔 Уведомления работают', message: 'Так будет выглядеть новый запрос из таблицы.' }).then(err => reply(err));
     return true;
   }
 });

@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Переводы Зары",
-  "version": "1.1.0",
-  "description": "Боковая панель к таблице Зары: новые запросы, подстановка из архива, статистика, загрузка xliff от подрядчиков.",
+  "name": "Маркетинг: пуши и баннеры",
+  "version": "1.1.1",
+  "description": "Боковая панель к таблице переводов маркетинга: новые запросы, подстановка из архива, статистика, загрузка xliff от подрядчиков.",
   "permissions": ["storage", "alarms", "notifications", "sidePanel"],
   "host_permissions": ["https://script.google.com/*", "https://script.googleusercontent.com/*"],
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "panel.html" },
   "action": {
-    "default_title": "Переводы Зары",
+    "default_title": "Маркетинг: пуши и баннеры",
     "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
   },
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
