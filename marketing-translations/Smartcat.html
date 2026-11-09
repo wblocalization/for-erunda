@@ -77,12 +77,12 @@ async function read(list) {
   google.script.run.withSuccessHandler(show).withFailureHandler(fail).smartcatImport(UNITS, false);
 }
 
-const CLS = { 'встанет': 'ok', 'вставлено': 'ok', 'уже стоит': 'gray', 'уже есть другой перевод': 'warn', 'строка не найдена': 'bad', 'язык не найден': 'bad' };
-const ORDER = ['вставлено', 'встанет', 'уже есть другой перевод', 'уже стоит', 'строка не найдена', 'язык не найден'];
+const CLS = { 'вставлю': 'ok', 'вставлено': 'ok', 'уже есть': 'gray', 'другой перевод': 'warn', 'нет в таблице': 'bad', 'язык не распознан': 'bad' };
+const ORDER = ['вставлено', 'вставлю', 'другой перевод', 'уже есть', 'нет в таблице', 'язык не распознан'];
 function show(report) {
   report = report.slice().sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
   const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  const ready = report.filter(r => r.status === 'встанет').length;
+  const ready = report.filter(r => r.status === 'вставлю').length;
   const done = report.filter(r => r.status === 'вставлено').length;
   $('out').innerHTML = '<div class="wrap"><table><tr><th>Строка</th><th>Язык</th><th>Текст RU</th><th>Перевод</th><th></th></tr>' +
     report.map(r => '<tr><td>' + esc(r.id || '—') + '</td><td>' + esc(r.lang) + '</td><td>' + esc(r.src).slice(0, 90) + '</td><td>' + esc(r.tgt).slice(0, 90) +
@@ -90,7 +90,7 @@ function show(report) {
       '</td><td><span class="st ' + (CLS[r.status] || 'gray') + '">' + esc(r.status) + '</span></td></tr>').join('') + '</table></div>';
   $('apply').disabled = !ready;
   $('msg').textContent = done ? 'Вставлено: ' + done + '. Строки, где переведены все языки, получили статус «Готово».' :
-    ready ? 'Встанет: ' + ready + ' из ' + report.length + '. Уже заполненные ячейки не трогаю.' : 'Вставлять нечего.';
+    ready ? 'Вставлю ' + ready + ' из ' + report.length + '. Уже заполненные ячейки не трогаю.' : 'Вставлять нечего.';
 }
 function fail(e) { $('msg').textContent = 'Ошибка: ' + e.message; $('apply').disabled = false; }
 $('apply').onclick = () => {

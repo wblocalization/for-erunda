@@ -499,7 +499,7 @@ function showSmartcatDialog() {
 
 const SC_LANG = { kk: 'KK', ky: 'KY', uz: 'UZ', hy: 'HY', tg: 'TG', ka: 'KA', az: 'AZ', en: 'EN' };
 
-// units: [{file, lang: 'uz-Latn', src, tgt, max}]. apply=false — только показать, что куда встанет.
+// units: [{file, lang: 'uz-Latn', src, tgt, max}]. apply=false — только показать, что куда попадёт.
 // push_… ищется на вкладке пушей, banner_… — на вкладке баннеров (не нашлось — на другой).
 function smartcatImport(units, apply) {
   // Один и тот же текст с тем же переводом может встретиться в файле дважды — считаем один раз.
@@ -528,7 +528,7 @@ function smartcatImport(units, apply) {
     const lang = SC_LANG[String(u.lang).toLowerCase().split('-')[0]];
     const kind = /^banner/i.test(u.file) ? 'Баннер' : /^push/i.test(u.file) ? 'Пуш' : '';
     const item = { file: u.file, lang: lang || u.lang, src: u.src, tgt: u.tgt };
-    if (!lang) { item.status = 'язык не найден'; report.push(item); return; }
+    if (!lang) { item.status = 'язык не распознан'; report.push(item); return; }
     const order = tabs.slice().sort(function (a, b) { return (b.def.type === kind) - (a.def.type === kind); });
     let t = null, cand = [];
     for (let k = 0; k < order.length && !cand.length; k++) {
@@ -536,7 +536,7 @@ function smartcatImport(units, apply) {
       if (t.C.lang[lang] === -1) continue;
       cand = t.byKey[kSpace_(u.src)] || t.byEmoji[kEmoji_(u.src)] || [];
     }
-    if (!cand.length) { item.status = 'строка не найдена'; report.push(item); return; }
+    if (!cand.length) { item.status = 'нет в таблице'; report.push(item); return; }
     // Самая свежая строка (новые внизу), где этот язык ещё пуст; иначе самая свежая.
     const C = t.C;
     const empty = cand.filter(function (i) { return !String(t.vals[i][C.lang[lang]]).trim(); });
@@ -546,11 +546,11 @@ function smartcatImport(units, apply) {
     item.sheet = t.def.name;
     const cur = String(t.vals[i][C.lang[lang]] || '').trim();
     const max = Number(u.max) || (C.limit !== -1 ? limitOf_(t.vals[i][C.limit]) : 0);
-    if (cur && cur !== String(u.tgt).trim()) item.status = 'уже есть другой перевод';
-    else if (cur) item.status = 'уже стоит';
-    else item.status = 'встанет';
+    if (cur && cur !== String(u.tgt).trim()) item.status = 'другой перевод';
+    else if (cur) item.status = 'уже есть';
+    else item.status = 'вставлю';
     if (max && String(u.tgt).length > max) item.over = String(u.tgt).length + ' / ' + max;
-    if (apply && item.status === 'встанет') {
+    if (apply && item.status === 'вставлю') {
       t.vals[i][C.lang[lang]] = u.tgt;
       t.bgs[i][C.lang[lang]] = item.over ? CFG.RED : '#ffffff';
       t.touched[i] = true;
@@ -794,7 +794,7 @@ function doPost(e) {
   const lock = LockService.getDocumentLock();
   if (!lock.tryLock(20000)) return json_({ error: 'таблица занята, попробуйте ещё раз' });
   try {
-    // Переводы от подрядчика (xliff), присланные расширением: сначала apply=false (что куда встанет), потом apply=true.
+    // Переводы от подрядчика (xliff), присланные расширением: сначала apply=false (что куда попадёт), потом apply=true.
     if (body.action === 'smartcat') return json_({ report: smartcatImport(body.units || [], !!body.apply) });
     if (body.action === 'archive') { archiveDone(); return json_(listForExtension_()); }
     const ids = body.ids || [body.id];

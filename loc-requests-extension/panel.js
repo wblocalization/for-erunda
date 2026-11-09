@@ -305,12 +305,12 @@ async function readFiles(list) {
   catch (e) { box.textContent = e.message; }
 }
 
-const RCLS = { 'встанет': 'archive', 'вставлено': 'archive', 'уже стоит': '', 'уже есть другой перевод': 'check', 'строка не найдена': 'over', 'язык не найден': 'over' };
-const ORDER = ['вставлено', 'встанет', 'уже есть другой перевод', 'уже стоит', 'строка не найдена', 'язык не найден'];
+const RCLS = { 'вставлю': 'archive', 'вставлено': 'archive', 'уже есть': '', 'другой перевод': 'check', 'нет в таблице': 'over', 'язык не распознан': 'over' };
+const ORDER = ['вставлено', 'вставлю', 'другой перевод', 'уже есть', 'нет в таблице', 'язык не распознан'];
 function showReport(res) {
   const rep = (res.report || []).slice().sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
-  const ready = rep.filter(r => r.status === 'встанет').length, done = rep.filter(r => r.status === 'вставлено').length;
-  $('screp').innerHTML = '<b>' + (done ? '✅ Вставлено: ' + done + '. Где переведены все языки — статус «Готово».' : 'Встанет: ' + ready + ' из ' + rep.length + '. Уже заполненные ячейки не трогаю.') + '</b>' +
+  const ready = rep.filter(r => r.status === 'вставлю').length, done = rep.filter(r => r.status === 'вставлено').length;
+  $('screp').innerHTML = '<b>' + (done ? '✅ Вставлено: ' + done + '. Где переведены все языки — статус «Готово».' : 'Вставлю ' + ready + ' из ' + rep.length + '. Уже заполненные ячейки не трогаю.') + '</b>' +
     rep.map(r => '<div class="r"><span>' + esc(r.id || '—') + '</span><b>' + esc(r.lang) + '</b><span>' + esc(Array.from(r.src).slice(0, 70).join('')) +
       (r.over ? ' <span class="tag over">длиннее ' + esc(r.over) + '</span>' : '') + '</span><span class="tag ' + (RCLS[r.status] || '') + '">' + esc(r.status) + '</span></div>').join('') +
     (ready ? '<div class="btns"><button class="p" id="scApply">Вставить в таблицу</button><button id="scCancel">Отмена</button></div>' : '<div class="btns"><button id="scCancel">Закрыть</button></div>');
