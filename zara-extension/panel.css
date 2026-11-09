@@ -146,3 +146,9 @@ summary small{color:var(--mute)}
 .stbtns button:hover:not(.on){background:var(--soft)}
 .stbtns button.on.st-ven{background:var(--s-ven-bg);color:var(--s-ven)}.stbtns button.on.st-chk{background:var(--s-chk-bg);color:var(--s-chk)}
 .stbtns button.on.st-done{background:var(--s-done-bg);color:var(--s-done)}.stbtns button.on.st-gray{background:#ececec;color:#6d6d6d}
+/* шапка: длинное название не переносится, кнопки всегда в одну строку */
+header{gap:8px}
+.ttl{min-width:0;flex:1}
+.ttl b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.ttl span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hbtns{display:flex;flex:none;gap:4px}.hbtns button{margin-left:0;padding:4px 8px}

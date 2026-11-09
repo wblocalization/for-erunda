@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Маркетинг: пуши и баннеры",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Боковая панель к таблице переводов маркетинга: новые запросы, подстановка из архива, статистика, загрузка xliff от подрядчиков.",
   "permissions": ["storage", "alarms", "notifications", "sidePanel"],
   "host_permissions": ["https://script.google.com/*", "https://script.googleusercontent.com/*"],
