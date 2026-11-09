@@ -281,5 +281,21 @@ for i in range(max(len(PRODUCTS), len(BTYPES), len(STATUSES), len(LANGS))):
 for c in dc[1]: c.font = HEAD; c.fill = HFILL
 for i in range(1, 7): dc.column_dimensions[L(i)].width = 22
 
+# --- Остальные листы старой таблицы (рекламации, стоимость заказов, анализ) — переносим как есть, со скрытостью ---
+from copy import copy as _copy
+for old in src.worksheets[4:]:
+    ws = wb.create_sheet(old.title[:31])
+    for row in old.iter_rows():
+        for c in row:
+            if c.value is None and not c.has_style: continue
+            n = ws.cell(row=c.row, column=c.column, value=c.value)
+            if c.has_style:
+                n.font = _copy(c.font); n.fill = _copy(c.fill); n.alignment = _copy(c.alignment); n.number_format = c.number_format; n.border = _copy(c.border)
+    for k, d in old.column_dimensions.items():
+        if d.width: ws.column_dimensions[k].width = d.width
+    ws.freeze_panes = old.freeze_panes
+    ws.sheet_state = old.sheet_state
+    ws.sheet_properties.tabColor = '9A9A9A'
+
 wb.save(sys.argv[2])
 print('запросов:', len(rows), dict(cnt), 'архив:', wa.max_row - 1, 'без части языков:', sum(1 for x in rows if x['note']))
