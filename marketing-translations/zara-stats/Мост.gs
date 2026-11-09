@@ -39,6 +39,23 @@ function zsBridgeSetup() {
     'Баннеры: ' + (B ? '«' + B.getName() + '», строк ' + B.getLastRow() : 'лист не найден'));
 }
 
+// 🩺 Проверка по шагам: запускайте zsTest, если zsBridgeSetup пишет «неизвестная ошибка».
+function zsTest() {
+  Logger.log('Шаг 1 ✅ скрипт запускается');
+  PropertiesService.getScriptProperties().setProperty('ZS_PING', String(Date.now()));
+  Logger.log('Шаг 2 ✅ настройки скрипта работают');
+  const m = String(ZS_TABLE_URL).match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (!m) { Logger.log('Шаг 3 ❌ в ZS_TABLE_URL нет ссылки на таблицу'); return; }
+  Logger.log('Шаг 3 ✅ ссылка распознана');
+  let f;
+  try { f = DriveApp.getFileById(m[1]); }
+  catch (e) { Logger.log('Шаг 4 ❌ файл не найден этим аккаунтом (' + Session.getEffectiveUser().getEmail() + '): нет доступа или ссылка не та'); return; }
+  Logger.log('Шаг 4 ✅ файл «' + f.getName() + '», тип: ' + f.getMimeType());
+  if (f.getMimeType() !== 'application/vnd.google-apps.spreadsheet') { Logger.log('Шаг 5 ❌ это не Google Таблица, а файл Excel. Откройте его → «Файл» → «Сохранить как Google Таблицу» и возьмите новую ссылку'); return; }
+  const ss = SpreadsheetApp.openById(m[1]);
+  Logger.log('Шаг 5 ✅ таблица открылась, листы: ' + ss.getSheets().map(function (x) { return x.getName(); }).join(', '));
+}
+
 function zsToken_() { return PropertiesService.getScriptProperties().getProperty('ZS_TOKEN') || ''; }
 function zsJson_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 
