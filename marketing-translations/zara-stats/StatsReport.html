@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Переводы маркетинга · статистика</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
+<style>
+/* Отчёт-лента: сверху главные цифры, ниже — объёмы, языки, продукты и отдельный блок про повторы. */
+:root{
+  --bg:#f6f4f8; --card:#ffffff; --ink:#221c30; --ink2:#5b5468; --mute:#8f889c; --line:#e9e5ef; --soft:#f2eff6;
+  --accent:#c2477a; --accent-soft:#fbe6ef; --navy:#2e2566;
+  --s1:#2a78d6; --s2:#eb6834; --bar:#2a78d6;
+  --good:#1e8a57; --good-soft:#e2f6ec; --warn:#a36500; --warn-soft:#fff3dc;
+  --f:"Onest",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16141b; --card:#201d27; --ink:#efecf4; --ink2:#c2bccd; --mute:#8d869a; --line:#322e3b; --soft:#2a2632;
+  --accent:#ef7aa8; --accent-soft:#3e2331; --navy:#b8adf5; --s1:#3987e5; --s2:#d95926; --bar:#3987e5;
+  --good:#6fd5a0; --good-soft:#1f3a2c; --warn:#f0b04f; --warn-soft:#3b2f18; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#16141b; --card:#201d27; --ink:#efecf4; --ink2:#c2bccd; --mute:#8d869a; --line:#322e3b; --soft:#2a2632;
+  --accent:#ef7aa8; --accent-soft:#3e2331; --navy:#b8adf5; --s1:#3987e5; --s2:#d95926; --bar:#3987e5;
+  --good:#6fd5a0; --good-soft:#1f3a2c; --warn:#f0b04f; --warn-soft:#3b2f18; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f);padding:0 max(16px,env(safe-area-inset-left,0px)) 48px}
+.wrap{max-width:1080px;margin:0 auto}
+header{padding:36px 96px 20px 0}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:clamp(28px,4.4vw,42px);line-height:1.1;margin:6px 0 8px;letter-spacing:-.02em;text-wrap:balance}
+.sub{color:var(--ink2);max-width:720px}
+h2{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+.lead{color:var(--ink2);margin:0 0 16px;font-size:14.5px;max-width:760px}
+section{margin-top:28px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;min-width:0}
+.kpi .v{font-size:30px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:4px}
+.kpi .l{font-size:13px;color:var(--ink2);font-weight:600}
+.kpi .h{font-size:12.5px;color:var(--mute);margin-top:6px}
+.kpi.hot{background:var(--accent-soft);border-color:transparent}
+.kpi.hot .v{color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--ink2);margin:4px 0 10px;flex-wrap:wrap}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+svg text{fill:var(--mute);font:12px var(--f)}
+svg .lbl{fill:var(--ink2);font-weight:600}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:10px;padding:7px 10px;font-size:12.5px;line-height:1.35;opacity:0;transition:opacity .1s;white-space:pre;z-index:9}
+.tip.show{opacity:1}
+.hbar{display:grid;grid-template-columns:150px 1fr 64px;gap:10px;align-items:center;padding:5px 0;font-size:13.5px}
+.hbar .n{color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar .t{height:14px;border-radius:0 4px 4px 0;background:var(--soft);position:relative}
+.hbar .f{position:absolute;left:0;top:0;bottom:0;border-radius:0 4px 4px 0;background:var(--bar)}
+.hbar .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.hbar:hover .f{filter:brightness(1.1)}
+.levels{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:6px}
+.lv{border-radius:14px;padding:14px;background:var(--soft);min-width:0}
+.lv b{display:block;font-size:26px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.lv span{font-size:13px;font-weight:700}
+.lv small{display:block;color:var(--mute);font-size:12px;margin-top:4px;line-height:1.35}
+.lv.ok{background:var(--good-soft)} .lv.ok span,.lv.ok b{color:var(--good)}
+.lv.chk{background:var(--warn-soft)} .lv.chk span,.lv.chk b{color:var(--warn)}
+.tbl{width:100%;border-collapse:collapse;font-size:14px}
+.tbl th{text-align:left;color:var(--mute);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line)}
+.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .num{font-variant-numeric:tabular-nums;font-weight:800;color:var(--accent);font-size:18px}
+.scroll{overflow-x:auto}
+.pair{display:grid;grid-template-columns:1fr 26px 1fr;gap:8px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.pair:first-of-type{border-top:0}
+.pair .t{background:var(--soft);border-radius:12px;padding:9px 12px;font-size:14px;white-space:pre-line;min-width:0}
+.pair .t small{display:block;color:var(--mute);font-size:12px;margin-top:3px}
+.pair .arrow{text-align:center;color:var(--mute)}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;margin-bottom:6px}
+.tag.ok{background:var(--good-soft);color:var(--good)} .tag.chk{background:var(--warn-soft);color:var(--warn)} .tag.hint{background:var(--soft);color:var(--ink2)}
+.chips span{display:inline-block;font:600 11px ui-monospace,monospace;background:var(--soft);border-radius:6px;padding:1px 6px;margin:1px}
+.note{font-size:13px;color:var(--mute);margin-top:12px;line-height:1.5}
+.callout{background:var(--accent-soft);border-radius:16px;padding:16px 18px;font-size:14.5px}
+.callout b{color:var(--accent)}
+.theme{position:fixed;right:16px;top:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:6px 12px;font:600 13px var(--f);cursor:pointer}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;background:var(--bg);color:var(--ink2);font-size:17px;font-weight:600;z-index:20}
+.loading[hidden]{display:none}
+footer{color:var(--mute);font-size:13px;margin-top:36px;line-height:1.6}
+@media (max-width:860px){.kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.levels{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){header{padding-right:0;padding-top:56px}.hbar{grid-template-columns:100px 1fr 52px}.pair{grid-template-columns:1fr}.pair .arrow{transform:rotate(90deg)}}
+</style>
+</head>
+<body>
+<button class="theme" id="theme">◐ тема</button>
+<div class="loading" id="loading">📊 Считаю статистику по таблице… Первый раз — до минуты, дальше быстрее.</div>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Переводы маркетинга · отчёт</div>
+    <h1>Что заказывали на перевод и что можно было не заказывать</h1>
+    <div class="sub" id="range"></div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <h2>Запросы по месяцам</h2>
+    <p class="lead">Сколько текстов приходило на перевод. Наведите на столбик — покажу цифры. Последний месяц неполный.</p>
+    <div class="card">
+      <div class="legend"><span><i style="background:var(--s1)"></i>Пуши</span><span><i style="background:var(--s2)"></i>Баннеры</span></div>
+      <div id="months"></div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card"><h2>Какие языки просят</h2><p class="lead">В скольких запросах был язык</p><div id="langs"></div></div>
+    <div class="card"><h2>Для чего</h2><p class="lead">Запросов по продуктам</p><div id="prods"></div></div>
+  </section>
+
+  <section>
+    <h2>Повторы: уже переводили — заказали снова</h2>
+    <p class="lead">Текст сравнивается со всем, что переводили <b>в более ранние дни</b>. Если совпал и перевод уже был — его можно было взять из архива.</p>
+    <div class="callout" id="callout"></div>
+    <div class="levels" id="levels"></div>
+  </section>
+
+  <section class="card">
+    <h2>Доля повторов по месяцам</h2>
+    <p class="lead">Сколько процентов запросов месяца уже переводили раньше (без «похожих»)</p>
+    <div id="repmonths"></div>
+  </section>
+
+  <section class="card">
+    <h2>Чаще всего заказывали заново</h2>
+    <p class="lead">Один и тот же текст в разные дни (эмодзи и регистр не учитываются)</p>
+    <div class="scroll"><table class="tbl" id="top"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>Как это выглядит: последние примеры</h2>
+    <p class="lead">Слева — что уже переводили, справа — что заказали снова</p>
+    <div id="pairs"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="card"><h2>Какие баннеры</h2><p class="lead">Запросов по типу баннера</p><div id="btypes"></div></div>
+    <div class="card"><h2>Как считала</h2>
+      <p class="note" id="method" style="margin-top:0"></p>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+<div class="tip" id="tip"></div>
+<script>
+let D = null;
+const $ = id => document.getElementById(id);
+function start() {
+const fmt = n => Math.round(n).toLocaleString('ru-RU');
+const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MONTHS_F = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+const LN = { KK: 'Казахский', KY: 'Кыргызский', UZ: 'Узбекский', HY: 'Армянский', TG: 'Таджикский', KA: 'Грузинский', AZ: 'Азербайджанский', EN: 'Английский' };
+const LV = {
+  exact: ['Тот же текст', 'слово в слово', 'ok'],
+  emoji: ['Только эмодзи', 'перевод тот же, эмодзи другие', 'ok'],
+  punct: ['Знаки', 'запятая, «!» или пробел', 'chk'],
+  num: ['Цифры', '«до 80%» вместо «до 90%»', 'chk'],
+  fuzzy: ['Похоже на 90%+', 'не в сумме — проверять глазами', 'hint'],
+};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const mlabel = (k, full) => { const [y, m] = k.split('-'); return (full ? MONTHS_F : MONTHS)[+m - 1] + (full ? ' ' + y : ''); };
+
+$('range').textContent = 'Пуши и баннеры с ' + D.range[0] + ' по ' + D.range[1] + ' · обновлено ' + D.generated;
+
+const repShare = D.rep_count / D.total * 100;
+const saved = D.rep_words * D.rate;
+$('kpis').innerHTML = [
+  ['Запросов на перевод', fmt(D.total), 'пуши ' + fmt(D.push) + ' · баннеры ' + fmt(D.banner)],
+  ['Слов к переводу', fmt(D.all_words), 'слова текста × число языков'],
+  ['Заказали повторно', fmt(D.rep_count), repShare.toFixed(1).replace('.', ',') + '% запросов уже переводили раньше · ещё ' + D.fuzzy_count + ' похожих'],
+  ['Можно было не платить', '≈ ' + fmt(saved / 1000) + ' тыс ₽', fmt(D.rep_words) + ' слов × ' + String(D.rate).replace('.', ',') + ' ₽ (ставка без НДС)', 'hot'],
+].map(k => '<div class="kpi ' + (k[3] || '') + '"><div class="l">' + k[0] + '</div><div class="v">' + k[1] + '</div><div class="h">' + k[2] + '</div></div>').join('');
+
+/* столбцы по месяцам: пуши + баннеры (стопкой) */
+function monthsChart(el, rows, opts) {
+  const W = Math.max(320, Math.round(el.clientWidth || 1000)), H = opts.h || 260, padL = 44, padB = 28, padT = 14, n = rows.length;
+  const max = Math.max(...rows.map(r => r.total)) || 1;
+  const nice = (v => { const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p) * p; })(max);
+  const bw = Math.min(64, (W - padL - 10) / n * 0.62), gap = (W - padL - 10) / n;
+  const y = v => H - padB - (v / nice) * (H - padB - padT);
+  let s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="' + esc(opts.aria) + '">';
+  for (let i = 0; i <= 4; i++) {
+    const v = nice / 4 * i, yy = y(v);
+    s += '<line x1="' + padL + '" x2="' + W + '" y1="' + yy + '" y2="' + yy + '" stroke="var(--line)"/>';
+    s += '<text x="' + (padL - 8) + '" y="' + (yy + 4) + '" text-anchor="end">' + (opts.pct ? Math.round(v) + '%' : fmt(v)) + '</text>';
+  }
+  rows.forEach((r, i) => {
+    const x = padL + gap * i + (gap - bw) / 2;
+    let base = 0;
+    r.parts.forEach((p, j) => {
+      if (!p.v) return;
+      const y0 = y(base), y1 = y(base + p.v), top = j === r.parts.length - 1 || !r.parts.slice(j + 1).some(q => q.v);
+      const h = Math.max(0, y0 - y1 - (j > 0 && base > 0 ? 2 : 0));
+      const rx = top ? 4 : 0;
+      s += '<path d="' + roundTop(x, y1, bw, h, rx) + '" fill="' + p.c + '"/>';
+      base += p.v;
+    });
+    s += '<rect x="' + (x - 6) + '" y="' + padT + '" width="' + (bw + 12) + '" height="' + (H - padB - padT) + '" fill="transparent" data-tip="' + esc(r.tip) + '"/>';
+    s += '<text x="' + (x + bw / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + r.label + '</text>';
+  });
+  el.innerHTML = s + '</svg>';
+}
+function roundTop(x, y, w, h, r) {
+  if (h <= 0) return '';
+  r = Math.min(r, h, w / 2);
+  return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
+}
+const mk = Object.keys(D.months);
+function drawCharts() {
+monthsChart($('months'), mk.map(k => { const m = D.months[k]; return {
+  label: mlabel(k), total: m.push + m.banner, parts: [{ v: m.push, c: 'var(--s1)' }, { v: m.banner, c: 'var(--s2)' }],
+  tip: mlabel(k, true) + '\nпуши: ' + m.push + '\nбаннеры: ' + m.banner + '\nслов к переводу: ' + fmt(m.words) }; }), { aria: 'Запросы по месяцам' });
+monthsChart($('repmonths'), mk.map(k => { const m = D.months[k], t = m.push + m.banner, p = t ? m.rep / t * 100 : 0; return {
+  label: mlabel(k), total: p, parts: [{ v: p, c: 'var(--accent)' }],
+  tip: mlabel(k, true) + '\nповторов: ' + m.rep + ' из ' + t + ' (' + p.toFixed(1).replace('.', ',') + '%)\nслов в повторах: ' + fmt(m.rep_words) + '\n≈ ' + fmt(m.rep_words * D.rate) + ' ₽' }; }), { aria: 'Доля повторов по месяцам', pct: true, h: 220 });
+}
+drawCharts();
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 150); });
+
+function hbars(el, obj, label, top) {
+  let keys = Object.keys(obj).sort((a, b) => obj[b] - obj[a]);
+  if (top && keys.length > top) { const rest = keys.slice(top).reduce((s, k) => s + obj[k], 0); obj = Object.assign({}, obj, { 'Остальное': rest }); keys = keys.slice(0, top).concat('Остальное'); }
+  const max = Math.max(...keys.map(k => obj[k])) || 1;
+  el.innerHTML = keys.map(k => '<div class="hbar" data-tip="' + esc((label ? label(k) : k) + ': ' + fmt(obj[k])) + '"><span class="n">' + esc(label ? label(k) : k) +
+    '</span><span class="t"><span class="f" style="width:' + (obj[k] / max * 100).toFixed(1) + '%"></span></span><span class="v">' + fmt(obj[k]) + '</span></div>').join('');
+}
+hbars($('langs'), D.lang, k => LN[k] || k);
+hbars($('prods'), D.prod, null, 8);
+hbars($('btypes'), D.btype, null, 7);
+
+$('callout').innerHTML = '<b>' + fmt(D.rep_count) + ' из ' + fmt(D.total) + '</b> запросов (' + repShare.toFixed(1).replace('.', ',') + '%) уже переводили раньше. Это <b>' + fmt(D.rep_words) +
+  ' слов</b> на всех языках — примерно <b>' + fmt(saved) + ' ₽</b> по средней ставке подрядчика. Зелёные ниже можно было брать из архива без проверки, жёлтые — с быстрой проверкой цифр и знаков. ' +
+  'Ещё <b>' + D.fuzzy_count + '</b> текстов похожи на 90%+ — их в сумму не включаю: «до» и «от» на глаз почти одинаковы, а смысл разный.';
+$('levels').innerHTML = Object.keys(LV).map(k => '<div class="lv ' + (k === 'fuzzy' ? '' : LV[k][2]) + '"><span>' + LV[k][0] + '</span><b>' + fmt(D.levels[k] || 0) + '</b><small>' + LV[k][1] +
+  (D.lvl_words[k] ? ' · ' + fmt(D.lvl_words[k]) + ' слов' : '') + '</small></div>').join('');
+
+$('top').innerHTML = '<tr><th>Раз</th><th>Текст</th><th>Когда</th><th>Языки</th></tr>' + D.top.map(t =>
+  '<tr><td class="num">' + t.times + '</td><td>' + esc(t.ru) + '</td><td style="white-space:nowrap;color:var(--ink2)">' + t.first + ' → ' + t.last + '</td><td class="chips">' + t.langs.map(l => '<span>' + l + '</span>').join('') + '</td></tr>').join('');
+
+$('pairs').innerHTML = D.examples.map(e => '<div class="pair"><div class="t">' + esc(e.prev_ru) + '<small>' + e.prev + '</small></div><div class="arrow">→</div><div class="t"><span class="tag ' + LV[e.level][2] + '">' + LV[e.level][0] + '</span><br>' + esc(e.ru) + '<small>' + e.date + ' · можно было взять: ' + e.langs.join(', ') + '</small></div></div>').join('');
+
+$('method').innerHTML = '• Запрос — одна строка с текстом на вкладках пушей и баннеров. Строки-образцы («пример») не считаются.<br>' +
+  '• Повтор — текст уже был в запросе <b>за более ранний день</b>, и у него есть перевод хотя бы на один из нужных языков. Варианты одного текста в один день повтором не считаются.<br>' +
+  '• Сравнение: регистр, «ё/е» и лишние пробелы не важны; отдельно — отличаются только эмодзи, знаки, цифры; «похоже» — совпадает на 90%+ по буквам.<br>' +
+  '• Ставка ' + String(D.rate).replace('.', ',') + ' ₽ за слово — средняя по ' + D.paid.orders + ' сметам из листа «Анализ переводов» (' + fmt(D.paid.cost) + ' ₽ без НДС за ' + fmt(D.paid.words) + ' слов). ' +
+  'Если подрядчик даёт скидку на повторы через память переводов, реальная переплата меньше — цифра показывает масштаб.';
+$('foot').textContent = 'Посчитано из этой таблицы ' + D.generated + '. Пересчитать заново — меню «📊 Статистика → Пересчитать заново».';
+
+}
+/* загрузка из таблицы */
+function load(fresh) {
+  $('loading').hidden = false;
+  if (!(window.google && google.script && google.script.run)) { $('loading').textContent = 'Откройте отчёт из таблицы: меню «📊 Статистика».'; return; }
+  google.script.run.withSuccessHandler(function (data) {
+    $('loading').hidden = true;
+    if (!data || data.empty) { $('loading').hidden = false; $('loading').textContent = 'В таблице пока нет запросов с датой и текстом RU.'; return; }
+    D = data; start();
+  }).withFailureHandler(function (e) {
+    $('loading').textContent = 'Не получилось посчитать: ' + (e && e.message ? e.message : e);
+  }).zsGetData();
+}
+load();
+/* подсказки */
+document.addEventListener('mousemove', e => {
+  const t = e.target.closest('[data-tip]'), tip = $('tip');
+  if (!t) { tip.classList.remove('show'); return; }
+  tip.textContent = t.dataset.tip; tip.classList.add('show');
+  const w = tip.offsetWidth; tip.style.left = Math.min(e.clientX + 14, innerWidth - w - 8) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+});
+$('theme').onclick = () => {
+  const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  r.dataset.theme = dark ? 'light' : 'dark';
+};
+</script>
+</body>
+</html>
