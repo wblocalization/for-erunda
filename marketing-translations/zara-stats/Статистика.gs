@@ -102,7 +102,7 @@ function zsGetData(from, to) {
 function zsPeriod_(from, to) {
   const ok = function (d) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')); };
   if (ok(from) && ok(to)) return from <= to ? { from: from, to: to } : { from: to, to: from };
-  const tz = zsSS_().getSpreadsheetTimeZone(), now = new Date();
+  const tz = zsTz_(), now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth(), 1), last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
   return { from: Utilities.formatDate(first, tz, 'yyyy-MM-dd'), to: Utilities.formatDate(last, tz, 'yyyy-MM-dd') };
 }
@@ -161,7 +161,11 @@ function zs_ratio(a, b, maxShare) {
   return 1 - prev[n] / big;
 }
 
-function zs_day(d) { return Utilities.formatDate(d, zsSS_().getSpreadsheetTimeZone(), 'yyyy-MM-dd'); }
+// Часовой пояс и форматирование дат — с запоминанием: обращения к сервисам Google медленные.
+let ZS_TZ_ = null;
+function zsTz_() { return ZS_TZ_ || (ZS_TZ_ = zsSS_().getSpreadsheetTimeZone()); }
+const ZS_DAYS_ = {};
+function zs_day(d) { const k = d.getTime(); return ZS_DAYS_[k] || (ZS_DAYS_[k] = Utilities.formatDate(d, zsTz_(), 'yyyy-MM-dd')); }
 
 function zsReadRows_() {
   const rows = [];
@@ -221,8 +225,8 @@ function zsAnalyze_() {
   const rows = zsReadRows_();
   const LEVEL = ['exact', 'emoji', 'punct', 'num', 'fuzzy'];
   const idx = { k1: {}, k2: {}, k3: {} };
-  const tz = zsSS_().getSpreadsheetTimeZone();
-  const fmtD = function (d) { return Utilities.formatDate(d, tz, 'dd.MM.yyyy'); };
+  const tz = zsTz_();
+  const fmtD = function (d) { const k = zs_day(d); return k.slice(8, 10) + '.' + k.slice(5, 7) + '.' + k.slice(0, 4); };
 
   rows.forEach(function (x, i) {
     x.k1 = zs_k1(x.ru); x.k2 = zs_k2(x.ru); x.k3 = zs_k3(x.ru); x.w = zs_words(x.ru);
@@ -262,8 +266,8 @@ function zsBuild_(from, to) {
   const all = zsAnalyze_();
   if (!all.length) return { empty: true };
   const LEVEL = ['exact', 'emoji', 'punct', 'num', 'fuzzy'];
-  const tz = zsSS_().getSpreadsheetTimeZone();
-  const fmtD = function (d) { return Utilities.formatDate(d, tz, 'dd.MM.yyyy'); };
+  const tz = zsTz_();
+  const fmtD = function (d) { const k = zs_day(d); return k.slice(8, 10) + '.' + k.slice(5, 7) + '.' + k.slice(0, 4); };
   const f = function (d) { return d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4); };
   const rows = all.filter(function (x) { return x.day >= from && x.day <= to; });
   // шаг графика: до двух месяцев — по дням, дольше — по месяцам
@@ -389,7 +393,7 @@ function zsSwapNumbers_(oldSrc, newSrc, tr) {
 // Архив: все строки пушей и баннеров с переводами + «Репозиторий». skip — строки, которые сейчас проверяем.
 function zsArchive_(skip) {
   const list = [];
-  const tz = zsSS_().getSpreadsheetTimeZone();
+  const tz = zsTz_();
   [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].forEach(function (sh) {
     if (!sh || sh.getLastRow() < 2) return;
     const L = zsLayout_(sh);
@@ -402,7 +406,8 @@ function zsArchive_(skip) {
       const tr = {};
       Object.keys(L.tr).forEach(function (l) { const v = zs_s(r[L.tr[l] - 1]); if (v) tr[l] = v; });
       if (!Object.keys(tr).length || zs_sample(Object.keys(tr).map(function (k) { return tr[k]; }))) return;
-      list.push({ src: L.kind + (lastDate ? ' от ' + Utilities.formatDate(lastDate, tz, 'dd.MM.yyyy') : '') + ' (строка ' + (i + 2) + ')', ru: ru, tr: tr, t: lastDate ? lastDate.getTime() : 0 });
+      const dk = lastDate ? zs_day(lastDate) : '';
+      list.push({ src: L.kind + (dk ? ' от ' + dk.slice(8, 10) + '.' + dk.slice(5, 7) + '.' + dk.slice(0, 4) : '') + ' (строка ' + (i + 2) + ')', ru: ru, tr: tr, t: lastDate ? lastDate.getTime() : 0 });
     });
   });
   const R = zsSheet_('Репозиторий');
@@ -565,7 +570,7 @@ function zsExport(from, to) {
   const d = zsBuild_(per.from, per.to);
   if (d.empty) throw new Error('Нет данных');
   const all = zsAnalyze_().filter(function (x) { return x.day >= per.from && x.day <= per.to; });
-  const tz = zsSS_().getSpreadsheetTimeZone();
+  const tz = zsTz_();
   const LN = { KK: 'Казахский', KY: 'Кыргызский', UZ: 'Узбекский', HY: 'Армянский', TG: 'Таджикский', KA: 'Грузинский', AZ: 'Азербайджанский', EN: 'Английский' };
   const LV = { exact: 'тот же текст', emoji: 'только эмодзи', punct: 'знаки', num: 'цифры', fuzzy: 'похоже 90%+' };
   const out = SpreadsheetApp.create('Статистика переводов ' + d.range[0] + '–' + d.range[1]);

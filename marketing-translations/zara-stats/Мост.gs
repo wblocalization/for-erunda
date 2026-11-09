@@ -107,7 +107,7 @@ function zsExportT(token, from, to) { if (token !== zsToken_()) throw new Error(
 
 // Последние строки пушей и баннеров: что заказали, какие языки уже переведены, какие ждут.
 function zsList_() {
-  const ss = zsSS_(), tz = ss.getSpreadsheetTimeZone();
+  const ss = zsSS_(), tz = zsTz_();
   const items = [];
   [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].forEach(function (sh) {
     if (!sh || sh.getLastRow() < 2) return;
@@ -131,7 +131,7 @@ function zsList_() {
       const missing = want.filter(function (l) { return !tr[l]; });
       items.push({
         id: (L.kind === 'пуш' ? 'P' : 'B') + row, sheet: L.kind, row: row,
-        date: date ? Utilities.formatDate(date, tz, 'dd.MM.yyyy') : '', t: date ? date.getTime() : 0,
+        date: date ? zs_day(date).split('-').reverse().join('.') : '', t: date ? date.getTime() : 0,
         product: product, btype: btype, langs: want, ru: ru, tr: tr, missing: missing,
         note: notes[i][0] || '',
         url: ss.getUrl() + '#gid=' + sh.getSheetId() + '&range=A' + row,
