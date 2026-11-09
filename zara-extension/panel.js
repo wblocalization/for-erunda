@@ -3,13 +3,18 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&am
 if (!chrome.sidePanel) document.documentElement.classList.add('popup');   // браузер без боковой панели — обычное окошко
 
 const LANG_NAMES = { KK: 'казахский', KY: 'кыргызский', UZ: 'узбекский', HY: 'армянский', TG: 'таджикский', KA: 'грузинский', AZ: 'азербайджанский', EN: 'английский' };
-// Вкладки: в таблице Зары нет статусов — смотрим, какие заказанные языки уже переведены.
+// Статусы — колонка «Статус» в таблице; плюс смотрим, какие заказанные языки уже переведены.
+const ST = { '📤 Отдано': 'st-ven', '⏸ Уточняем': 'st-chk', '✅ Готово': 'st-done', '❌ Отменено': 'st-gray' };
+const isDone = x => x.status === '✅ Готово' || (!x.missing.length && x.status !== '❌ Отменено');
 const TABS = [
-  { key: 'wait', name: 'Ждут перевода', cls: 'st-new', f: x => x.missing.length > 0, hint: 'Заказанные языки без перевода (красные). Проверьте по архиву или загрузите xliff во вкладке «📥 Файлы».' },
+  { key: 'new', name: 'Новые', cls: 'st-new', f: x => x.missing.length > 0 && !x.status, hint: 'Без статуса и без перевода. Проверьте по архиву, отметьте «📤 Отдано», когда отправите подрядчику.' },
+  { key: 'work', name: 'В работе', cls: 'st-ven', f: x => (x.status === '📤 Отдано' || x.status === '⏸ Уточняем') && !isDone(x), hint: 'Отдано подрядчику или уточняем. Когда переводы вставятся (xliff или архив), статус сам станет «✅ Готово».' },
   { key: 'arc', name: 'Из архива', cls: 'st-arc', f: x => /^♻️/.test(x.note), hint: 'Переводы подставлены из архива — откуда, видно в заметке. Жёлтые языки проверьте.' },
-  { key: 'done', name: 'Переведено', cls: 'st-done', f: x => x.missing.length === 0, hint: 'Все заказанные языки на месте.' },
+  { key: 'done', name: 'Готово', cls: 'st-done', f: isDone, hint: 'Все заказанные языки на месте или статус «✅ Готово».' },
+  { key: 'cancel', name: 'Отменено', cls: 'st-gray', f: x => x.status === '❌ Отменено', hint: 'Заказчик передумал — переводить не надо.' },
 ];
-let DATA = null, TAB = 0, KIND = '', Q = '', UNITS = [], STATS = null, SECTION = 'req', PERIOD = 'month';
+const cardCls = x => ST[x.status] || (x.missing.length ? 'st-new' : 'st-done');
+let LIST = [], DATA = null, TAB = 0, KIND = '', Q = '', UNITS = [], STATS = null, SECTION = 'req', PERIOD = 'month';
 const DAY = 864e5;
 
 function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('show'), 1900); }
@@ -49,14 +54,15 @@ function render() {
   $('sub').textContent = 'обновлено ' + DATA.updated;
   const items = DATA.items.slice().reverse();   // свежие сверху
   const fresh = x => !x.t || Date.now() - x.t < 14 * DAY;
-  $('navNew').textContent = items.filter(x => x.missing.length && fresh(x)).length || '';
-  $('tiles').style.gridTemplateColumns = 'repeat(3,1fr)';
+  $('navNew').textContent = items.filter(x => x.missing.length && !x.status && fresh(x)).length || '';
+  $('tiles').style.gridTemplateColumns = 'repeat(' + TABS.length + ',1fr)';
   $('tiles').innerHTML = TABS.map((t, i) => '<button class="tile ' + t.cls + (i === TAB ? ' on' : '') + '" data-i="' + i + '"><b>' + items.filter(t.f).length + '</b><span>' + t.name + '</span></button>').join('');
   $('tabHint').textContent = TABS[TAB].hint;
   const q = Q.toLowerCase();
   const list = items.filter(x => TABS[TAB].f(x) && (!KIND || x.sheet === KIND) &&
     (!q || [x.ru, x.product, x.btype, x.row].join(' ').toLowerCase().indexOf(q) !== -1));
-  $('bulk').innerHTML = '';
+  LIST = list;
+  $('bulk').innerHTML = TABS[TAB].key === 'new' && list.length ? '<button class="p" id="bulkGo">📤 Отметить все ' + list.length + ' как «Отдано»</button>' : '';
   $('list').innerHTML = list.length ? list.slice(0, 150).map(card).join('') : '<div class="empty">Здесь пусто 🌴</div>';
 }
 
@@ -70,14 +76,17 @@ function card(x) {
   const trs = x.langs.filter(l => x.tr[l]).map(l => '<div class="tr" data-copy="' + esc(x.tr[l]) + '" title="Нажмите, чтобы скопировать"><b>' + l + '</b><span>' + esc(x.tr[l]) + '</span><span></span></div>').join('');
   const btn = (act, text, cls) => '<button data-act="' + act + '" data-id="' + esc(x.id) + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + text + '</button>';
   const btns = [];
-  if (x.missing.length) btns.push(btn('check', '♻️ Проверить по архиву', 'p'));
+  if (x.missing.length && !x.status) btns.push(btn('check', '♻️ Проверить по архиву', 'p'));
   if (trs) btns.push(btn('copy', '⧉ Копировать переводы'));
   btns.push(btn('open', '↗ Строка ' + x.row));
-  return '<div class="card ' + (x.missing.length ? 'st-new' : 'st-done') + '"><div class="top"><span class="chip ' + kind + '">' + esc(label) + '</span>' +
-    (x.date ? '<span>от ' + esc(x.date) + '</span>' : '') + (x.product ? '<span>· ' + esc(x.product) + '</span>' : '') + '</div>' +
+  const sts = (DATA.statuses || Object.keys(ST)).map(v => '<button data-act="st" data-st="' + esc(v) + '" data-id="' + esc(x.id) + '" class="' + (v === x.status ? 'on ' + ST[v] : '') + '" title="' +
+    (v === x.status ? 'Нажмите ещё раз, чтобы снять' : 'Поставить статус') + '">' + esc(v) + '</button>').join('');
+  return '<div class="card ' + cardCls(x) + '"><div class="top"><span class="chip ' + kind + '">' + esc(label) + '</span>' +
+    (x.date ? '<span>от ' + esc(x.date) + '</span>' : '') + (x.product ? '<span>· ' + esc(x.product) + '</span>' : '') +
+    (x.status ? '<span class="chip ' + (ST[x.status] || '') + '">' + esc(x.status) + '</span>' : '') + '</div>' +
     (langs ? '<div class="langs">' + langs + '</div>' : '<div class="miss">языки не указаны</div>') +
     '<div class="ru">' + esc(x.ru) + '</div>' + match + trs +
-    '<div class="btns">' + btns.join('') + '</div></div>';
+    '<div class="btns">' + btns.join('') + '</div><div class="stbtns">' + sts + '</div></div>';
 }
 
 $('tiles').onclick = e => { const b = e.target.closest('.tile'); if (b) { TAB = Number(b.dataset.i); render(); $('list').scrollTop = 0; } };
@@ -95,6 +104,10 @@ $('list').addEventListener('click', async e => {
   const a = b.dataset.act, x = DATA.items.find(i => i.id === b.dataset.id);
   if (a === 'open') return chrome.tabs.create({ url: x.url || DATA.url });
   if (a === 'copy') return copy(x.langs.filter(l => x.tr[l]).map(l => l + ':\n' + x.tr[l]).join('\n\n'), 'Переводы скопированы — вставьте в тред');
+  if (a === 'st') {
+    const v = b.dataset.st === x.status ? '' : b.dataset.st;
+    return setStatus([x], v, v ? 'Статус: ' + v : 'Статус снят');
+  }
   if (a === 'check') {
     b.disabled = true;
     try {
@@ -104,6 +117,21 @@ $('list').addEventListener('click', async e => {
       toast(c.filled ? 'Подставила из архива: ' + c.filled + (c.check ? ' (проверить: ' + c.check + ')' : '') : c.fuzzy ? 'Точно такого нет, есть похожий — смотрите заметку' : 'В архиве такого текста нет — нужно заказывать');
     } catch (err) { toast(err.message); b.disabled = false; }
   }
+});
+
+async function setStatus(items, status, msg) {
+  document.querySelectorAll('#list button, #bulk button').forEach(b => b.disabled = true);
+  $('sub').textContent = 'сохраняю…';
+  try {
+    DATA = await API.post({ action: 'status', status, items: items.map(x => ({ sheet: x.sheet, row: x.row })) });
+    await chrome.storage.local.set({ data: DATA });
+    render(); toast(msg);
+  } catch (err) { toast(err.message); render(); }
+}
+$('bulk').addEventListener('click', e => {
+  if (!e.target.closest('#bulkGo') || !LIST.length) return;
+  if (!confirm('Поставить «📤 Отдано» всем ' + LIST.length + ' запросам в списке?')) return;
+  setStatus(LIST, '📤 Отдано', 'Отдано: ' + LIST.length);
 });
 
 /* ---------- поиск по архиву ---------- */

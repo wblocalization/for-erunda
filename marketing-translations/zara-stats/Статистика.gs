@@ -70,6 +70,7 @@ function zsOnOpen() {
     .addSeparator()
     .addItem('📥 Загрузить переводы от подрядчика (xliff)…', 'zsShowUpload')
     .addItem('♻️ Проверить выделенные строки по архиву', 'zsCheckSelected')
+    .addItem('🏷 Добавить колонку «Статус»', 'zsAddStatusColumn')
     .addToUi();
 }
 
@@ -514,6 +515,7 @@ function zsCheckRows_(sh, rows) {
     });
     res.filled += filled.length + check.length;
     res.check += check.length;
+    if (filled.length + check.length && !missing.length) zsAutoDone_(sh, L, rn);
     // Заметка на тексте RU — только если там нет чужой заметки.
     const ruCell = sh.getRange(rn, L.ru);
     const oldNote = ruCell.getNote();
@@ -563,6 +565,85 @@ function zsCheckSelected() {
 
 
 /* ============================================================================
+ * 🏷 Статусы задач: колонка «Статус» справа от данных (в листах пушей и баннеров).
+ * Колонку создаём только по запросу — в первую полностью пустую колонку справа.
+ * ========================================================================== */
+const ZS_ST = [
+  { v: '📤 Отдано', bg: '#d6e6fb', fg: '#1d5fb8' },
+  { v: '⏸ Уточняем', bg: '#ffe7b0', fg: '#7a4f00' },
+  { v: '✅ Готово', bg: '#c9eef0', fg: '#0e6b70' },
+  { v: '❌ Отменено', bg: '#eeeeee', fg: '#777777' },
+];
+
+// Номер колонки «Статус» (ищем по заголовку правее данных) или 0.
+function zsStatusCol_(sh, L) {
+  const lc = sh.getLastColumn();
+  if (lc <= L.width) return 0;
+  const h = sh.getRange(1, L.width + 1, 1, lc - L.width).getValues()[0];
+  for (let i = 0; i < h.length; i++) if (/^статус/i.test(zs_s(h[i]))) return L.width + 1 + i;
+  return 0;
+}
+
+function zsEnsureStatusCol_(sh, L) {
+  let c = zsStatusCol_(sh, L);
+  if (c) return c;
+  const last = Math.max(sh.getLastRow(), 2);
+  for (c = L.width + 1; ; c++) {
+    if (c > sh.getMaxColumns()) { sh.insertColumnsAfter(sh.getMaxColumns(), 1); break; }
+    const vals = sh.getRange(1, c, last, 1).getValues();
+    if (vals.every(function (r) { return !zs_s(r[0]); })) break;
+  }
+  sh.getRange(1, L.ru).copyTo(sh.getRange(1, c), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+  sh.getRange(1, c).setValue('Статус');
+  sh.setColumnWidth(c, 130);
+  const rng = sh.getRange(2, c, Math.max(sh.getMaxRows() - 1, 1), 1);
+  rng.setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList(ZS_ST.map(function (x) { return x.v; }), true).setAllowInvalid(true).build());
+  const rules = sh.getConditionalFormatRules();
+  ZS_ST.forEach(function (x) {
+    rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(x.v).setBackground(x.bg).setFontColor(x.fg).setRanges([rng]).build());
+  });
+  sh.setConditionalFormatRules(rules);
+  return c;
+}
+
+// Все языки переведены → «✅ Готово», если статус пустой, «Отдано» или «Уточняем». Колонку сам не создаёт.
+function zsAutoDone_(sh, L, row) {
+  const c = zsStatusCol_(sh, L);
+  if (!c) return;
+  const cell = sh.getRange(row, c), cur = zs_s(cell.getValue());
+  if (!cur || cur === ZS_ST[0].v || cur === ZS_ST[1].v) cell.setValue(ZS_ST[2].v);
+}
+
+// items: [{sheet: 'пуш'|'баннер', row}], status: одно из ZS_ST или '' (снять).
+function zsSetStatus(items, status) {
+  status = zs_s(status);
+  if (status && !ZS_ST.some(function (x) { return x.v === status; })) throw new Error('Неизвестный статус: ' + status);
+  const by = {};
+  (items || []).forEach(function (it) { const r = Number(it.row); if (r >= 2) (by[it.sheet === 'баннер' ? 'баннер' : 'пуш'] = by[it.sheet === 'баннер' ? 'баннер' : 'пуш'] || []).push(r); });
+  let n = 0;
+  Object.keys(by).forEach(function (k) {
+    const sh = zsSheet_(k === 'баннер' ? ZS_CFG.BANNER : ZS_CFG.PUSH);
+    if (!sh) return;
+    const c = zsEnsureStatusCol_(sh, zsLayout_(sh));
+    by[k].forEach(function (r) { sh.getRange(r, c).setValue(status); n++; });
+  });
+  return n;
+}
+
+function zsAddStatusColumn() {
+  const made = [];
+  [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].forEach(function (sh) {
+    if (!sh) return;
+    const c = zsEnsureStatusCol_(sh, zsLayout_(sh));
+    made.push('«' + sh.getName() + '» — колонка ' + sh.getRange(1, c).getA1Notation().replace(/\d+/, ''));
+  });
+  SpreadsheetApp.getUi().alert('Колонка «Статус» есть:\n' + made.join('\n') + '\n\nВыбирайте из списка: ' + ZS_ST.map(function (x) { return x.v; }).join(', ') +
+    '.\nКогда все заказанные языки переведены (из архива или xliff), статус сам станет «✅ Готово».');
+}
+
+
+/* ============================================================================
  * ⬇️ Выгрузка статистики за период — в НОВУЮ отдельную Google Таблицу (рабочая таблица не меняется)
  * ========================================================================== */
 function zsExport(from, to) {
@@ -602,10 +683,17 @@ function zsExport(from, to) {
   if (Object.keys(d.btype).length) put('Типы баннеров', tbl(d.btype, ['Тип баннера', 'Запросов']), [200, 120]);
   put(d.step === 'day' ? 'По дням' : 'По месяцам', [[d.step === 'day' ? 'День' : 'Месяц', 'Пуши', 'Баннеры', 'Слов к переводу', 'Повторов', 'Слов в повторах']].concat(
     Object.keys(d.months).map(function (k) { const m = d.months[k]; return [k, m.push, m.banner, m.words, m.rep, m.rep_words]; })), [120, 80, 80, 140, 100, 140]);
-  put('Повторы', [['Дата', 'Тип', 'Текст RU', 'Совпадение', 'Уже было', 'Текст тогда', 'Можно было взять']].concat(
-    all.filter(function (x) { return x.rep; }).map(function (x) {
-      return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.ru, LV[x.rep.level], x.rep.prev, x.rep.prev_ru, x.rep.covered.join(', ')];
-    })), [100, 70, 360, 120, 100, 360, 160]);
+  // Повторы: каждая строка — из чего сложилась сумма «можно было не платить».
+  const reps = all.filter(function (x) { return x.rep; });
+  const repRows = reps.map(function (x) {
+    const inSum = x.rep.level !== 'fuzzy', lw = x.w * x.rep.covered.length;
+    return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, x.ru, LV[x.rep.level], x.rep.prev, x.rep.prev_ru, x.rep.covered.join(', '),
+      x.w, x.rep.covered.length, lw, inSum ? Math.round(lw * d.rate) : 0, inSum ? 'да' : 'нет — проверить глазами'];
+  });
+  const sumW = repRows.reduce(function (s, r) { return s + (r[12] === 'да' ? r[10] : 0); }, 0);
+  repRows.push(['', '', '', 'ИТОГО (только «да»)', '', '', '', '', '', '', sumW, Math.round(sumW * d.rate), '']);
+  put('Повторы', [['Дата', 'Тип', 'Продукт', 'Текст RU', 'Совпадение', 'Уже было', 'Текст тогда', 'Можно было взять', 'Слов в тексте', 'Языков', 'Слов × языки', '₽ (оценка)', 'В сумме?']].concat(repRows),
+    [100, 70, 110, 360, 120, 100, 360, 160, 90, 70, 100, 100, 150]);
   put('Все запросы', [['Дата', 'Тип', 'Продукт', 'Языки', 'Текст RU', 'Слов', 'Повтор']].concat(
     all.map(function (x) { return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, x.langs.join(', '), x.ru, x.w, x.rep ? LV[x.rep.level] : '']; })),
     [100, 70, 120, 200, 420, 60, 120]);
@@ -680,6 +768,7 @@ function zsImport(units, apply) {
         t.sh.getRange(i + 2, col).setValue(u.tgt).setBackground(null);   // снимаем подсветку «нет перевода»
         t.vals[i][col - 1] = u.tgt;
         item.status = 'вставлено';
+        if (t.langs[i].every(function (l) { return !t.L.tr[l] || zs_s(t.vals[i][t.L.tr[l] - 1]); })) zsAutoDone_(t.sh, t.L, i + 2);
       }
       report.push(item);
     });

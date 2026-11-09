@@ -73,7 +73,7 @@ function doGet(e) {
   return zsJson_({ ok: true });
 }
 
-// POST (text/plain JSON): {token, action: list | stats | search | check | import, …}
+// POST (text/plain JSON): {token, action: list | stats | search | check | import | status, …}
 function doPost(e) {
   let b = {};
   try { b = JSON.parse(e.postData.contents); } catch (err) { return zsJson_({ error: 'плохой запрос' }); }
@@ -83,6 +83,15 @@ function doPost(e) {
     if (b.action === 'stats') return zsJson_(zsGetData(b.from, b.to));
     if (b.action === 'search') return zsJson_(zsSearch_(b.q));
     if (b.action === 'import') return zsJson_({ report: zsImport(b.units || [], !!b.apply) });
+    if (b.action === 'status') {
+      const lock = zsLock_();
+      if (!lock.tryLock(20000)) return zsJson_({ error: 'таблица занята, попробуйте ещё раз' });
+      let n;
+      try { n = zsSetStatus(b.items || [], b.status || ''); } finally { lock.releaseLock(); }
+      const out = zsList_();
+      out.changed = n;
+      return zsJson_(out);
+    }
     if (b.action === 'check') {
       const sh = b.sheet === 'баннер' ? zsSheet_(ZS_CFG.BANNER) : zsSheet_(ZS_CFG.PUSH);
       const lock = zsLock_();
@@ -116,6 +125,8 @@ function zsList_() {
     const last = sh.getLastRow(), from = 2, head = 2;
     const vals = sh.getRange(head, 1, last - head + 1, L.width).getValues();
     const notes = sh.getRange(head, L.ru, last - head + 1, 1).getNotes();
+    const stc = zsStatusCol_(sh, L);
+    const sts = stc ? sh.getRange(head, stc, last - head + 1, 1).getValues() : null;
     let langs = '', date = null, product = '', btype = '';
     vals.forEach(function (r, i) {
       const row = head + i;
@@ -133,7 +144,7 @@ function zsList_() {
         id: (L.kind === 'пуш' ? 'P' : 'B') + row, sheet: L.kind, row: row,
         date: date ? zs_day(date).split('-').reverse().join('.') : '', t: date ? date.getTime() : 0,
         product: product, btype: btype, langs: want, ru: ru, tr: tr, missing: missing,
-        note: notes[i][0] || '',
+        note: notes[i][0] || '', status: sts ? zs_s(sts[i][0]) : '',
         url: ss.getUrl() + '#gid=' + sh.getSheetId() + '&range=A' + row,
       });
     });
@@ -143,7 +154,8 @@ function zsList_() {
   return {
     updated: Utilities.formatDate(new Date(), tz, 'dd.MM HH:mm'),
     url: ss.getUrl(),
-    counts: { wait: recent.filter(function (x) { return x.missing.length; }).length, done: recent.filter(function (x) { return !x.missing.length; }).length },
+    statuses: ZS_ST.map(function (x) { return x.v; }),
+    counts: { wait: recent.filter(function (x) { return x.missing.length && !x.status; }).length, done: recent.filter(function (x) { return !x.missing.length; }).length },
     items: recent,
   };
 }

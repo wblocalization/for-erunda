@@ -136,3 +136,13 @@ summary small{color:var(--mute)}
 .tip.show{opacity:1}
 .toast{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:99px;padding:6px 14px;font-size:12px;opacity:0;transition:.2s;pointer-events:none;z-index:10}
 .toast.show{opacity:1}
+
+/* статусы */
+.st-gray{background:#ececec;color:#6d6d6d}.card.st-gray{border-left-color:#b5b5b5;opacity:.75}
+.chip.st-ven,.chip.st-chk,.chip.st-done,.chip.st-gray{margin-left:auto}
+.stbtns{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+.stbtns button{font-size:11px;padding:3px 7px;background:none;border:1px solid var(--line);color:var(--ink2)}
+.stbtns button.on{border-color:transparent;font-weight:700}
+.stbtns button:hover:not(.on){background:var(--soft)}
+.stbtns button.on.st-ven{background:var(--s-ven-bg);color:var(--s-ven)}.stbtns button.on.st-chk{background:var(--s-chk-bg);color:var(--s-chk)}
+.stbtns button.on.st-done{background:var(--s-done-bg);color:var(--s-done)}.stbtns button.on.st-gray{background:#ececec;color:#6d6d6d}
