@@ -697,7 +697,7 @@ function setup() {
 /* ---------- оформление (для таблиц, созданных до новой версии) ---------- */
 
 const LOOK = {
-  CLIENT: { 'Тип баннера': 'из списка', 'Продукт': 'из списка', 'Языки': '«все» или KK, UZ…', 'Лимит': 'символов', 'Дедлайн': 'когда нужен',
+  CLIENT: { 'Тип баннера': 'из списка', 'Продукт': 'из списка', 'Языки': 'из списка, можно несколько', 'Лимит': 'символов', 'Дедлайн': 'когда нужен',
     'Ссылка (тред / Figma)': 'Band / Figma', 'Контекст': 'где и зачем этот текст', 'Текст RU': 'одна строка = один текст' },
   AUTO: { 'ID': 'сам', 'Дата': 'сама', 'Статус': 'меняет локализация', 'Уже переводили?': 'таблица ищет в архиве сама' },
   LANG: { KK: ['казахский', '#1f8a8a'], KY: ['кыргызский', '#c0392b'], UZ: ['узбекский', '#2a78d6'], HY: ['армянский', '#d9822b'],
@@ -735,7 +735,7 @@ function restyle_(sh) {
   }
   const labels = Object.keys(CFG.ST_LABEL).map(function (k) { return CFG.ST_LABEL[k]; });
   sh.getRange(2, C.status + 1, n, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(labels, true).setAllowInvalid(true).build());
-  // Цвета: статус, розовый ID у новых, серый текст у закрытых строк.
+  // Цвета: статус и розовый ID у новых.
   const col = function (c) { return sh.getRange(2, c + 1, n, 1).getA1Notation().replace(/\d+/g, ''); };
   const sc = col(C.status).split(':')[0];
   const rules = [];
@@ -745,9 +745,6 @@ function restyle_(sh) {
   });
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$' + sc + '2="' + CFG.ST_LABEL['Новый'] + '"')
     .setBackground('#ffd3e2').setFontColor('#a1204f').setBold(true).setRanges([sh.getRange(2, C.id + 1, n, 1)]).build());
-  const grayRanges = [sh.getRange(2, C.id + 2, n, C.status - C.id - 1), sh.getRange(2, C.match + 1, n, 1)];
-  rules.push(SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=OR($' + sc + '2="' + CFG.ST_LABEL['Отдан'] + '",$' + sc + '2="' + CFG.ST_LABEL['Отменён'] + '")')
-    .setFontColor('#8c8a94').setRanges(grayRanges).build());
   sh.setConditionalFormatRules(rules);
 }
 
