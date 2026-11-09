@@ -49,6 +49,7 @@ function zsOnOpen() {
     .addItem('Открыть отчёт', 'zsShow')
     .addItem('Пересчитать заново', 'zsShowFresh')
     .addSeparator()
+    .addItem('📥 Загрузить переводы от подрядчика (xliff)…', 'zsShowUpload')
     .addItem('♻️ Проверить выделенные строки по архиву', 'zsCheckSelected')
     .addToUi();
 }
@@ -585,4 +586,82 @@ function zsExport(from, to) {
     all.map(function (x) { return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, x.langs.join(', '), x.ru, x.w, x.rep ? LV[x.rep.level] : '']; })),
     [100, 70, 120, 200, 420, 60, 120]);
   return { url: out.getUrl(), name: out.getName() };
+}
+
+
+/* ============================================================================
+ * 📥 Переводы от подрядчика (.xliff) → в строки заказчиков
+ * Пишет только в ПУСТЫЕ ячейки языков, которые в этой строке заказывали.
+ * Незаказанные языки не трогает (их красит существующий скрипт таблицы, как и раньше).
+ * ========================================================================== */
+function zsShowUpload() {
+  const html = HtmlService.createHtmlOutputFromFile('ZsUpload').setWidth(780).setHeight(580);
+  SpreadsheetApp.getUi().showModalDialog(html, '📥 Загрузить переводы от подрядчика');
+}
+
+const ZS_XLANG = { kk: 'KK', ky: 'KY', uz: 'UZ', hy: 'HY', tg: 'TG', ka: 'KA', az: 'AZ', en: 'EN' };
+
+// units: [{file, lang: 'az-Latn', src, tgt}]. apply=false — только показать, что куда попадёт.
+function zsImport(units, apply) {
+  const lock = LockService.getDocumentLock();
+  if (apply && !lock.tryLock(20000)) throw new Error('Таблица занята, попробуйте ещё раз');
+  try {
+    const tabs = [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].filter(Boolean).map(function (sh) {
+      const L = zsLayout_(sh), n = Math.max(sh.getLastRow() - 1, 0);
+      const vals = n ? sh.getRange(2, 1, n, L.width).getValues() : [];
+      const t = { sh: sh, L: L, vals: vals, k1: {}, k2: {}, langs: [] };
+      let lastLangs = '';
+      vals.forEach(function (r, i) {
+        if (zs_s(r[L.langs - 1])) lastLangs = r[L.langs - 1];
+        else if (r[L.date - 1] instanceof Date) lastLangs = '';
+        t.langs[i] = zs_langs(zs_s(r[L.langs - 1]) || lastLangs);
+        const ru = zs_s(r[L.ru - 1]);
+        if (!ru || ru.toUpperCase().indexOf('ПРИМЕР') === 0) return;
+        (t.k1[zs_k1(ru)] = t.k1[zs_k1(ru)] || []).push(i);
+        (t.k2[zs_k2(ru)] = t.k2[zs_k2(ru)] || []).push(i);
+      });
+      return t;
+    });
+    const seen = {}, report = [];
+    (units || []).forEach(function (u) {
+      const lang = ZS_XLANG[String(u.lang || '').toLowerCase().split(/[-_]/)[0]];
+      const key = lang + '|' + zs_k1(u.src) + '|' + zs_s(u.tgt);
+      if (seen[key]) return;                      // повтор внутри файла — один раз
+      seen[key] = true;
+      const item = { lang: lang || u.lang, src: u.src, tgt: u.tgt, file: u.file };
+      if (!lang) { item.status = 'язык не распознан'; report.push(item); return; }
+      const kind = /^banner/i.test(u.file) ? 'баннер' : /^push/i.test(u.file) ? 'пуш' : '';
+      const order = tabs.slice().sort(function (a, b) { return (b.L.kind === kind) - (a.L.kind === kind); });
+      let t = null, cand = [];
+      for (let k = 0; k < order.length && !cand.length; k++) {
+        t = order[k];
+        if (!t.L.tr[lang]) continue;
+        cand = t.k1[zs_k1(u.src)] || t.k2[zs_k2(u.src)] || [];
+      }
+      if (!cand.length) { item.status = 'нет в таблице'; report.push(item); return; }
+      const col = t.L.tr[lang];
+      const ordered = cand.filter(function (i) { return t.langs[i].indexOf(lang) !== -1; });
+      if (!ordered.length) {
+        item.status = 'язык не заказывали'; item.row = cand[cand.length - 1] + 2; item.sheet = t.L.kind; report.push(item); return;
+      }
+      // самая свежая строка (новые внизу), где этот язык ещё пуст; иначе самая свежая
+      const empty = ordered.filter(function (i) { return !zs_s(t.vals[i][col - 1]); });
+      const i = (empty.length ? empty : ordered).slice(-1)[0];
+      item.row = i + 2; item.sheet = t.L.kind;
+      const cur = zs_s(t.vals[i][col - 1]);
+      if (cur && cur !== zs_s(u.tgt)) item.status = 'другой перевод';
+      else if (cur) item.status = 'уже есть';
+      else item.status = 'вставлю';
+      if (apply && item.status === 'вставлю') {
+        t.sh.getRange(i + 2, col).setValue(u.tgt).setBackground(null);   // снимаем подсветку «нет перевода»
+        t.vals[i][col - 1] = u.tgt;
+        item.status = 'вставлено';
+      }
+      report.push(item);
+    });
+    if (apply) zsBump_();
+    return report;
+  } finally {
+    if (apply) lock.releaseLock();
+  }
 }
