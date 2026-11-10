@@ -24,16 +24,22 @@ async function poll() {
   let data;
   try { data = await API.list(); }
   catch (e) {
-    chrome.action.setBadgeText({ text: '!' });
-    chrome.action.setBadgeBackgroundColor({ color: '#9a8fb0' });
-    chrome.action.setTitle({ title: 'Маркетинг: пуши и баннеры: ' + e.message });
+    // «!» на значке — только если связи нет три проверки подряд; разовый сбой не показываем.
+    const { fails } = await chrome.storage.local.get({ fails: 0 });
+    await chrome.storage.local.set({ fails: fails + 1 });
+    if (fails + 1 >= 3) {
+      chrome.action.setBadgeText({ text: '!' });
+      chrome.action.setBadgeBackgroundColor({ color: '#9a8fb0' });
+    }
+    chrome.action.setTitle({ title: 'Маркетинг: пуши и баннеры — ' + e.message });
     return;
   }
+  await chrome.storage.local.set({ fails: 0 });
   // На значке — сколько свежих запросов ждут перевода.
   const waiting = data.items.filter(i => i.missing.length && !i.status && (!i.t || Date.now() - i.t < FRESH)).length;
   chrome.action.setBadgeText({ text: waiting ? String(waiting) : '' });
   chrome.action.setBadgeBackgroundColor({ color: '#e5638f' });
-  chrome.action.setTitle({ title: 'Маркетинг: пуши и баннеры: новых без статуса ' + waiting });
+  chrome.action.setTitle({ title: 'Маркетинг: пуши и баннеры — новых без статуса: ' + waiting });
 
   // «Видели» — по типу и тексту, а не по номеру строки: строки сдвигаются, когда в таблице что-то вставляют или сортируют.
   // seen2 — новый формат; при переходе на него первый опрос молча запоминает всё, что уже есть.
