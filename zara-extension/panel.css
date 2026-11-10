@@ -125,7 +125,7 @@ summary small{color:var(--mute)}
 .drop{border:2px dashed #d9cfe9;border-radius:12px;padding:18px;text-align:center;cursor:pointer;background:#fff;transition:.2s}
 .drop b{font-size:14px}.drop span{display:block;color:var(--mute);font-size:11.5px}.drop.over{border-color:var(--a2);background:#fff1f6}
 #screp:not(:empty){margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 10px}
-#screp .r{display:grid;grid-template-columns:58px 28px 1fr auto;gap:6px;padding:3px 0;font-size:12px;align-items:start;border-top:1px solid var(--line)}
+#screp .r{display:grid;grid-template-columns:46px minmax(70px,auto) 1fr auto;gap:6px;padding:3px 0;font-size:12px;align-items:start;border-top:1px solid var(--line)}
 
 /* настройки */
 #settings label{display:block;margin-bottom:10px;color:var(--ink2);font-size:12px}
@@ -157,3 +157,4 @@ header{gap:8px}
 .tr b{font:700 11.5px/1.35 inherit;font-family:inherit}
 .lchip{font:600 11px/1.3 inherit;font-family:inherit}
 .langs{display:flex;flex-wrap:wrap;gap:4px}
+#screp .r b{font-weight:700;font-size:11.5px;white-space:nowrap}
