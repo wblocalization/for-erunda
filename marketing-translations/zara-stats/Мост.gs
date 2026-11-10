@@ -144,7 +144,7 @@ function zsList_() {
         id: (L.kind === 'пуш' ? 'P' : 'B') + row, sheet: L.kind, row: row,
         date: date ? zs_day(date).split('-').reverse().join('.') : '', t: date ? date.getTime() : 0,
         product: product, btype: btype, langs: want, ru: ru, tr: tr, missing: missing,
-        note: notes[i][0] || '', status: sts ? zs_s(sts[i][0]) : '',
+        note: notes[i][0] || '', status: sts ? zsStatusName_(sts[i][0]) : '',
         url: ss.getUrl() + '#gid=' + sh.getSheetId() + '&range=A' + row,
       });
     });

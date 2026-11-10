@@ -1,6 +1,7 @@
 // Раз в пару минут спрашивает таблицу о запросах: новые → уведомление, на значке — сколько ждут.
 importScripts('api.js');
 
+const LANG_RU = { KK: 'казахский', KY: 'кыргызский', UZ: 'узбекский', HY: 'армянский', TG: 'таджикский', KA: 'грузинский', AZ: 'азербайджанский', EN: 'английский' };
 const FRESH = 14 * 864e5;                    // «новые» — за последние 2 недели
 const ICON = chrome.runtime.getURL('icons/icon128.png');
 
@@ -56,7 +57,7 @@ async function poll() {
       priority: 1,
       title: 'Новый ' + i.sheet + ': ' + (i.product || '') + reuse,
       message: i.ru.slice(0, 180),
-      contextMessage: i.langs.length ? 'языки: ' + i.langs.join(', ') : '',
+      contextMessage: i.langs.length ? 'языки: ' + i.langs.map(l => LANG_RU[l] || l).join(', ') : '',
     });
   });
   if (fresh.length > 5) {

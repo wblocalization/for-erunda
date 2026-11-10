@@ -76,7 +76,7 @@ svg .lbl{fill:var(--ink2);font-weight:600}
 .pair .arrow{text-align:center;color:var(--mute)}
 .tag{display:inline-block;font-size:11.5px;font-weight:700;border-radius:99px;padding:2px 9px;margin-bottom:6px}
 .tag.ok{background:var(--good-soft);color:var(--good)} .tag.chk{background:var(--warn-soft);color:var(--warn)} .tag.hint{background:var(--soft);color:var(--ink2)}
-.chips span{display:inline-block;font:600 11px ui-monospace,monospace;background:var(--soft);border-radius:6px;padding:1px 6px;margin:1px}
+.chips span{display:inline-block;font:600 11.5px var(--f);background:var(--soft);border-radius:6px;padding:1px 6px;margin:1px}
 .note{font-size:13px;color:var(--mute);margin-top:12px;line-height:1.5}
 .callout{background:var(--accent-soft);border-radius:16px;padding:16px 18px;font-size:14.5px}
 .callout b{color:var(--accent)}
@@ -275,9 +275,9 @@ $('levels').innerHTML = Object.keys(LV).map(k => '<div class="lv ' + (k === 'fuz
   (D.lvl_words[k] ? ' · ' + fmt(D.lvl_words[k]) + ' слов' : '') + '</small></div>').join('');
 
 $('top').innerHTML = '<tr><th>Раз</th><th>Текст</th><th>Когда</th><th>Языки</th></tr>' + D.top.map(t =>
-  '<tr><td class="num">' + t.times + '</td><td>' + esc(t.ru) + '</td><td style="white-space:nowrap;color:var(--ink2)">' + t.first + ' → ' + t.last + '</td><td class="chips">' + t.langs.map(l => '<span>' + l + '</span>').join('') + '</td></tr>').join('');
+  '<tr><td class="num">' + t.times + '</td><td>' + esc(t.ru) + '</td><td style="white-space:nowrap;color:var(--ink2)">' + t.first + ' → ' + t.last + '</td><td class="chips">' + t.langs.map(l => '<span>' + (LN[l] || l) + '</span>').join('') + '</td></tr>').join('');
 
-$('pairs').innerHTML = D.examples.map(e => '<div class="pair"><div class="t">' + esc(e.prev_ru) + '<small>' + e.prev + '</small></div><div class="arrow">→</div><div class="t"><span class="tag ' + LV[e.level][2] + '">' + LV[e.level][0] + '</span><br>' + esc(e.ru) + '<small>' + e.date + ' · можно было взять: ' + e.langs.join(', ') + '</small></div></div>').join('');
+$('pairs').innerHTML = D.examples.map(e => '<div class="pair"><div class="t">' + esc(e.prev_ru) + '<small>' + e.prev + '</small></div><div class="arrow">→</div><div class="t"><span class="tag ' + LV[e.level][2] + '">' + LV[e.level][0] + '</span><br>' + esc(e.ru) + '<small>' + e.date + ' · можно было взять: ' + e.langs.map(l => (LN[l] || l).toLowerCase()).join(', ') + '</small></div></div>').join('');
 
 $('method').innerHTML = '• Запрос — одна строка с текстом на вкладках пушей и баннеров. Строки-образцы («пример») не считаются.<br>' +
   '• Повтор — текст уже был в запросе <b>за более ранний день</b>, и у него есть перевод хотя бы на один из нужных языков. Варианты одного текста в один день повтором не считаются.<br>' +

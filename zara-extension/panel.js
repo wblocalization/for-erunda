@@ -3,21 +3,23 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&am
 if (!chrome.sidePanel) document.documentElement.classList.add('popup');   // браузер без боковой панели — обычное окошко
 
 const LANG_NAMES = { KK: 'казахский', KY: 'кыргызский', UZ: 'узбекский', HY: 'армянский', TG: 'таджикский', KA: 'грузинский', AZ: 'азербайджанский', EN: 'английский' };
+// Язык словами с большой буквы: KK → «Казахский».
+const ln = l => { const n = LANG_NAMES[l]; return n ? n[0].toUpperCase() + n.slice(1) : l; };
 // Статусы — колонка «Статус» в таблице; плюс смотрим, какие заказанные языки уже переведены.
-const ST = { '📤 Отдано': 'st-ven', '⏸ Уточняем': 'st-chk', '✅ Готово': 'st-done', '❌ Отменено': 'st-gray' };
+const ST = { '📤 Отдано подрядчику': 'st-ven', '⏸ Уточняем': 'st-chk', '✅ Готово': 'st-done', '❌ Отменено': 'st-gray' };
 const isDone = x => x.status === '✅ Готово' || (!x.missing.length && x.status !== '❌ Отменено');
 const TABS = [
-  { key: 'new', name: 'Новые', cls: 'st-new', f: x => x.missing.length > 0 && !x.status, hint: 'Без статуса и без перевода. Проверьте по архиву, отметьте «📤 Отдано», когда отправите подрядчику.' },
-  { key: 'work', name: 'В работе', cls: 'st-ven', f: x => (x.status === '📤 Отдано' || x.status === '⏸ Уточняем') && !isDone(x), hint: 'Отдано подрядчику или уточняем. Когда переводы вставятся (xliff или архив), статус сам станет «✅ Готово».' },
+  { key: 'new', name: 'Новые', cls: 'st-new', f: x => (x.missing.length > 0 || CHECKED[x.id]) && !x.status, hint: 'Без статуса и без перевода. Проверьте по архиву, отметьте «📤 Отдано подрядчику», когда отправите подрядчику.' },
+  { key: 'work', name: 'В работе', cls: 'st-ven', f: x => (x.status === '📤 Отдано подрядчику' || x.status === '⏸ Уточняем') && !isDone(x), hint: 'Отдано подрядчику или уточняем. Когда переводы вставятся (xliff или архив), статус сам станет «✅ Готово».' },
   { key: 'arc', name: 'Из архива', cls: 'st-arc', f: x => /^♻️/.test(x.note), hint: 'Переводы подставлены из архива — откуда, видно в заметке. Жёлтые языки проверьте.' },
   { key: 'done', name: 'Готово', cls: 'st-done', f: isDone, hint: 'Все заказанные языки на месте или статус «✅ Готово».' },
   { key: 'cancel', name: 'Отменено', cls: 'st-gray', f: x => x.status === '❌ Отменено', hint: 'Заказчик передумал — переводить не надо.' },
 ];
 const cardCls = x => ST[x.status] || (x.missing.length ? 'st-new' : 'st-done');
-let LIST = [], DATA = null, TAB = 0, KIND = '', Q = '', UNITS = [], STATS = null, SECTION = 'req', PERIOD = 'month';
+let CHECKED = {}, LIST = [], DATA = null, TAB = 0, KIND = '', Q = '', UNITS = [], STATS = null, SECTION = 'req', PERIOD = 'month';
 const DAY = 864e5;
 
-function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('show'), 1900); }
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('show'), 1900 + Math.min(4000, t.length * 40)); }
 async function copy(text, msg) { await navigator.clipboard.writeText(text); toast(msg || 'Скопировано'); }
 
 /* ---------- разделы ---------- */
@@ -62,21 +64,22 @@ function render() {
   const list = items.filter(x => TABS[TAB].f(x) && (!KIND || x.sheet === KIND) &&
     (!q || [x.ru, x.product, x.btype, x.row].join(' ').toLowerCase().indexOf(q) !== -1));
   LIST = list;
-  $('bulk').innerHTML = TABS[TAB].key === 'new' && list.length ? '<button class="p" id="bulkGo">📤 Отметить все ' + list.length + ' как «Отдано»</button>' : '';
+  $('bulk').innerHTML = TABS[TAB].key === 'new' && list.length ? '<button class="p" id="bulkGo">📤 Отметить все ' + list.length + ' как «Отдано подрядчику»</button>' : '';
   $('list').innerHTML = list.length ? list.slice(0, 150).map(card).join('') : '<div class="empty">Здесь пусто 🌴</div>';
 }
 
 function card(x) {
   const kind = x.sheet === 'баннер' ? 'banner' : 'push';
   const label = x.sheet === 'баннер' ? 'Баннер' + (x.btype ? ' · ' + x.btype : '') : 'Пуш';
-  const langs = x.langs.map(l => '<span class="lchip ' + (x.tr[l] ? 'ok' : 'no') + '" title="' + (x.tr[l] ? 'переведено' : 'нет перевода') + '">' + l + '</span>').join('');
+  const langs = x.langs.map(l => '<span class="lchip ' + (x.tr[l] ? 'ok' : 'no') + '" title="' + (x.tr[l] ? 'переведено' : 'нет перевода') + '">' + ln(l) + '</span>').join('');
   let match = '';
   if (/^♻️/.test(x.note)) match = '<div class="match ' + (/Проверить:/.test(x.note) ? 'm-check' : 'm-arc') + '">' + esc(x.note) + '</div>';
   else if (/^🔎/.test(x.note)) match = '<div class="match m-hint">' + esc(x.note) + '</div>';
-  const trs = x.langs.filter(l => x.tr[l]).map(l => '<div class="tr" data-copy="' + esc(x.tr[l]) + '" title="Нажмите, чтобы скопировать"><b>' + l + '</b><span>' + esc(x.tr[l]) + '</span><span></span></div>').join('');
+  const trs = x.langs.filter(l => x.tr[l]).map(l => '<div class="tr" data-copy="' + esc(x.tr[l]) + '" title="Нажмите, чтобы скопировать"><b>' + ln(l) + '</b><span>' + esc(x.tr[l]) + '</span><span></span></div>').join('');
   const btn = (act, text, cls) => '<button data-act="' + act + '" data-id="' + esc(x.id) + '"' + (cls ? ' class="' + cls + '"' : '') + '>' + text + '</button>';
   const btns = [];
-  if (x.missing.length && !x.status) btns.push(btn('check', '♻️ Проверить по архиву', 'p'));
+  if (x.missing.length && !x.status && !CHECKED[x.id]) btns.push(btn('check', '♻️ Проверить по архиву', 'p'));
+  const chk = CHECKED[x.id] ? '<div class="match ' + (CHECKED[x.id].ok ? 'm-arc' : 'm-hint') + '">' + esc(CHECKED[x.id].t) + '</div>' : '';
   if (trs) btns.push(btn('copy', '⧉ Копировать переводы'));
   btns.push(btn('open', '↗ Строка ' + x.row));
   const sts = (DATA.statuses || Object.keys(ST)).map(v => '<button data-act="st" data-st="' + esc(v) + '" data-id="' + esc(x.id) + '" class="' + (v === x.status ? 'on ' + ST[v] : '') + '" title="' +
@@ -85,7 +88,7 @@ function card(x) {
     (x.date ? '<span>от ' + esc(x.date) + '</span>' : '') + (x.product ? '<span>· ' + esc(x.product) + '</span>' : '') +
     (x.status ? '<span class="chip ' + (ST[x.status] || '') + '">' + esc(x.status) + '</span>' : '') + '</div>' +
     (langs ? '<div class="langs">' + langs + '</div>' : '<div class="miss">языки не указаны</div>') +
-    '<div class="ru">' + esc(x.ru) + '</div>' + match + trs +
+    '<div class="ru">' + esc(x.ru) + '</div>' + chk + match + trs +
     '<div class="btns">' + btns.join('') + '</div><div class="stbtns">' + sts + '</div></div>';
 }
 
@@ -103,19 +106,23 @@ $('list').addEventListener('click', async e => {
   if (!b) return;
   const a = b.dataset.act, x = DATA.items.find(i => i.id === b.dataset.id);
   if (a === 'open') return chrome.tabs.create({ url: x.url || DATA.url });
-  if (a === 'copy') return copy(x.langs.filter(l => x.tr[l]).map(l => l + ':\n' + x.tr[l]).join('\n\n'), 'Переводы скопированы — вставьте в тред');
+  if (a === 'copy') return copy(x.langs.filter(l => x.tr[l]).map(l => ln(l) + ':\n' + x.tr[l]).join('\n\n'), 'Переводы скопированы — вставьте в тред');
   if (a === 'st') {
     const v = b.dataset.st === x.status ? '' : b.dataset.st;
     return setStatus([x], v, v ? 'Статус: ' + v : 'Статус снят');
   }
   if (a === 'check') {
-    b.disabled = true;
+    b.disabled = true; b.textContent = '⏳ Ищу в архиве… до 20 сек';
     try {
       const r = await API.post({ action: 'check', sheet: x.sheet, row: x.row });
-      DATA = r; await chrome.storage.local.set({ data: DATA }); render();
       const c = r.check || {};
-      toast(c.filled ? 'Подставила из архива: ' + c.filled + (c.check ? ' (проверить: ' + c.check + ')' : '') : c.fuzzy ? 'Точно такого нет, есть похожий — смотрите заметку' : 'В архиве такого текста нет — нужно заказывать');
-    } catch (err) { toast(err.message); b.disabled = false; }
+      // Результат остаётся на карточке, а не только мелькает внизу.
+      CHECKED[x.id] = c.filled ? { ok: true, t: '♻️ Подставлено из архива: ' + c.filled + (c.check ? ' (жёлтых — проверить: ' + c.check + ')' : '') + '. Откуда взято — в заметке к ячейке.' }
+        : c.fuzzy ? { t: '🔎 Точно такого текста нет, но есть очень похожий — посмотрите подсказку ниже.' }
+        : { t: '🆕 В архиве такого текста нет — нужно заказывать перевод.' };
+      DATA = r; await chrome.storage.local.set({ data: DATA }); render();
+      toast(CHECKED[x.id].t);
+    } catch (err) { toast(err.message); b.disabled = false; b.textContent = '♻️ Проверить по архиву'; }
   }
 });
 
@@ -130,8 +137,8 @@ async function setStatus(items, status, msg) {
 }
 $('bulk').addEventListener('click', e => {
   if (!e.target.closest('#bulkGo') || !LIST.length) return;
-  if (!confirm('Поставить «📤 Отдано» всем ' + LIST.length + ' запросам в списке?')) return;
-  setStatus(LIST, '📤 Отдано', 'Отдано: ' + LIST.length);
+  if (!confirm('Поставить «📤 Отдано подрядчику» всем ' + LIST.length + ' запросам в списке?')) return;
+  setStatus(LIST, '📤 Отдано подрядчику', 'Отдано подрядчику: ' + LIST.length);
 });
 
 /* ---------- поиск по архиву ---------- */
@@ -148,10 +155,10 @@ async function search() {
     // Группы по источнику и уровню совпадения.
     const groups = {};
     langs.forEach(l => { const p = r.per[l]; const k = p.src + '|' + p.level; (groups[k] = groups[k] || { p, langs: [] }).langs.push(l); });
-    const all = langs.map(l => l + ':\n' + r.per[l].text).join('\n\n');
+    const all = langs.map(l => ln(l) + ':\n' + r.per[l].text).join('\n\n');
     html += '<div class="res"><h3>♻️ Уже переводили</h3>' + Object.values(groups).map(g =>
       '<div class="match ' + (g.p.level === 'num' || g.p.level === 'punct' ? 'm-check' : 'm-arc') + '">' + esc(g.p.src) + ' · ' + esc(g.p.words) + '\nисходник: ' + esc(g.p.ru) + '</div>' +
-      g.langs.map(l => '<div class="tr" data-copy="' + esc(r.per[l].text) + '" title="Нажмите, чтобы скопировать"><b>' + l + '</b><span>' + esc(r.per[l].text) + '</span><span></span></div>').join('')
+      g.langs.map(l => '<div class="tr" data-copy="' + esc(r.per[l].text) + '" title="Нажмите, чтобы скопировать"><b>' + ln(l) + '</b><span>' + esc(r.per[l].text) + '</span><span></span></div>').join('')
     ).join('') + '<div class="btns"><button class="p" data-copyall="' + esc(all) + '">⧉ Копировать все переводы</button></div></div>';
   } else if (r.fuzzy) {
     html += '<div class="res"><div class="match m-hint">🔎 Точно такого нет, но похоже на ' + esc(r.fuzzy.src) + ' (' + r.fuzzy.score + '%):\n«' + esc(r.fuzzy.ru) + '»</div></div>';
@@ -161,7 +168,7 @@ async function search() {
   if (r.hits.length) {
     html += '<div class="res"><h3>Где ещё встречается (' + r.hits.length + ')</h3>' + r.hits.map(h =>
       '<details><summary>' + esc(Array.from(h.ru).slice(0, 110).join('')) + ' <small>· ' + esc(h.src) + '</small></summary>' +
-      Object.keys(h.tr).map(l => '<div class="tr" data-copy="' + esc(h.tr[l]) + '" title="Нажмите, чтобы скопировать"><b>' + l + '</b><span>' + esc(h.tr[l]) + '</span><span></span></div>').join('') +
+      Object.keys(h.tr).map(l => '<div class="tr" data-copy="' + esc(h.tr[l]) + '" title="Нажмите, чтобы скопировать"><b>' + ln(l) + '</b><span>' + esc(h.tr[l]) + '</span><span></span></div>').join('') +
       '</details>').join('') + '</div>';
   }
   $('sres').innerHTML = html;
@@ -246,7 +253,7 @@ function renderStats() {
           (x.push ? '<div class="pu" style="height:' + hh(x.push) + '"></div>' : '') + (x.banner ? '<div class="b" style="height:' + hh(x.banner) + '"></div>' : '') + '</div>';
       }).join('') + '</div>' +
       '<div class="xl">' + keys.map((k, i) => '<span>' + (i % every === 0 ? lbl(k) : '') + '</span>').join('') + '</div></div>' +
-    '<div class="box"><h3>Какие языки просят</h3><div class="sub">в скольких запросах есть язык</div>' + bars(S.lang, { label: l => l + ' · ' + (LANG_NAMES[l] || l) }) + '</div>' +
+    '<div class="box"><h3>Какие языки просят</h3><div class="sub">в скольких запросах есть язык</div>' + bars(S.lang, { label: l => ln(l) }) + '</div>' +
     '<div class="box"><h3>Для каких продуктов</h3>' + bars(S.prod, { top: 7 }) + '</div>' +
     (Object.keys(S.btype).length ? '<div class="box"><h3>Какие баннеры</h3>' + bars(S.btype, { top: 7, orange: true }) + '</div>' : '') +
     (S.top.length ? '<div class="box"><h3>Чаще всего заказывали заново</h3>' + S.top.slice(0, 6).map(t => '<div class="toprow"><b>' + t.times + '×</b><span>' + esc(t.ru) + '</span></div>').join('') + '</div>' : '') +
@@ -318,7 +325,7 @@ function showReport(res) {
   const rep = (res.report || []).slice().sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
   const ready = rep.filter(r => r.status === 'вставлю').length, done = rep.filter(r => r.status === 'вставлено').length;
   $('screp').innerHTML = '<b>' + (done ? '✅ Вставлено: ' + done + '. Незаказанные языки не трогала.' : 'Вставлю ' + ready + ' из ' + rep.length + '. Только в заказанные языки и пустые ячейки.') + '</b>' +
-    rep.map(r => '<div class="r"><span>' + (r.row ? (r.sheet === 'баннер' ? 'Б ' : 'П ') + r.row : '—') + '</span><b>' + esc(r.lang) + '</b><span>' + esc(Array.from(r.src).slice(0, 70).join('')) +
+    rep.map(r => '<div class="r"><span>' + (r.row ? (r.sheet === 'баннер' ? 'Б ' : 'П ') + r.row : '—') + '</span><b>' + esc(ln(r.lang)) + '</b><span>' + esc(Array.from(r.src).slice(0, 70).join('')) +
       (r.over ? ' <span class="tag over">длиннее ' + esc(r.over) + '</span>' : '') + '</span><span class="tag ' + (RCLS[r.status] || '') + '">' + esc(r.status) + '</span></div>').join('') +
     (ready ? '<div class="btns"><button class="p" id="scApply">Вставить в таблицу</button><button id="scCancel">Отмена</button></div>' : '<div class="btns"><button id="scCancel">Закрыть</button></div>');
   const ap = $('scApply');

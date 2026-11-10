@@ -77,6 +77,7 @@ async function read(list) {
   google.script.run.withSuccessHandler(show).withFailureHandler(fail).zsImport(UNITS, false);
 }
 
+const LN = { KK: 'Казахский', KY: 'Кыргызский', UZ: 'Узбекский', HY: 'Армянский', TG: 'Таджикский', KA: 'Грузинский', AZ: 'Азербайджанский', EN: 'Английский' };
 const CLS = { 'вставлю': 'ok', 'вставлено': 'ok', 'уже есть': 'gray', 'другой перевод': 'warn', 'язык не заказывали': 'gray', 'нет в таблице': 'bad', 'язык не распознан': 'bad' };
 const ORDER = ['вставлено', 'вставлю', 'другой перевод', 'уже есть', 'язык не заказывали', 'нет в таблице', 'язык не распознан'];
 function show(report) {
@@ -85,7 +86,7 @@ function show(report) {
   const ready = report.filter(r => r.status === 'вставлю').length;
   const done = report.filter(r => r.status === 'вставлено').length;
   $('out').innerHTML = '<div class="wrap"><table><tr><th>Строка</th><th>Язык</th><th>Текст RU</th><th>Перевод</th><th></th></tr>' +
-    report.map(r => '<tr><td>' + (r.row ? esc(r.sheet) + ' · ' + r.row : '—') + '</td><td>' + esc(r.lang) + '</td><td>' + esc(r.src).slice(0, 90) + '</td><td>' + esc(r.tgt).slice(0, 90) +
+    report.map(r => '<tr><td>' + (r.row ? esc(r.sheet) + ' · ' + r.row : '—') + '</td><td>' + esc(LN[r.lang] || r.lang) + '</td><td>' + esc(r.src).slice(0, 90) + '</td><td>' + esc(r.tgt).slice(0, 90) +
       (r.over ? '<br><span class="st bad">длиннее лимита ' + esc(r.over) + '</span>' : '') +
       '</td><td><span class="st ' + (CLS[r.status] || 'gray') + '">' + esc(r.status) + '</span></td></tr>').join('') + '</table></div>';
   $('apply').disabled = !ready;

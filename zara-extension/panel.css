@@ -152,3 +152,8 @@ header{gap:8px}
 .ttl b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
 .ttl span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hbtns{display:flex;flex:none;gap:4px}.hbtns button{margin-left:0;padding:4px 8px}
+/* языки словами, а не кодами */
+.tr{grid-template-columns:minmax(76px,auto) 1fr auto}
+.tr b{font:700 11.5px/1.35 inherit;font-family:inherit}
+.lchip{font:600 11px/1.3 inherit;font-family:inherit}
+.langs{display:flex;flex-wrap:wrap;gap:4px}

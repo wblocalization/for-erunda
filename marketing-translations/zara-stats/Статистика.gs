@@ -114,6 +114,10 @@ function zsSheet_(prefix) {
   return null;
 }
 
+// Языки словами: «казахский, узбекский» вместо «KK, UZ».
+const ZS_LN = { KK: 'казахский', KY: 'кыргызский', UZ: 'узбекский', HY: 'армянский', TG: 'таджикский', KA: 'грузинский', AZ: 'азербайджанский', EN: 'английский' };
+function zsNames_(list) { return (list || []).map(function (l) { return ZS_LN[l] || l; }).join(', '); }
+
 function zs_s(v) { return v === null || v === undefined ? '' : String(v).trim(); }
 
 function zs_langs(v) {
@@ -522,9 +526,9 @@ function zsCheckRows_(sh, rows) {
     if (oldNote && !/^(♻️|🔎)/.test(oldNote)) return;
     let note = '';
     if (first) {
-      note = '♻️ Уже переводили: ' + first.src + ' · ' + ZS_LEVEL_WORDS[first.level] + '\nПодставлено: ' + filled.concat(check).join(', ');
-      if (check.length) note += '\nПроверить: ' + check.join(', ');
-      if (missing.length) note += '\nНет в архиве: ' + missing.join(', ');
+      note = '♻️ Уже переводили: ' + first.src + ' · ' + ZS_LEVEL_WORDS[first.level] + '\nПодставлено: ' + zsNames_(filled.concat(check));
+      if (check.length) note += '\nПроверить: ' + zsNames_(check);
+      if (missing.length) note += '\nНет в архиве: ' + zsNames_(missing);
     } else if (found.fuzzy) {
       note = '🔎 Похоже на ' + found.fuzzy.src + ' (' + found.fuzzy.score + '%):\n«' + found.fuzzy.ru.slice(0, 160) + '»\nПроверьте — может, перевод можно взять оттуда.';
       res.fuzzy++;
@@ -569,11 +573,13 @@ function zsCheckSelected() {
  * Колонку создаём только по запросу — в первую полностью пустую колонку справа.
  * ========================================================================== */
 const ZS_ST = [
-  { v: '📤 Отдано', bg: '#d6e6fb', fg: '#1d5fb8' },
+  { v: '📤 Отдано подрядчику', bg: '#d6e6fb', fg: '#1d5fb8' },
   { v: '⏸ Уточняем', bg: '#ffe7b0', fg: '#7a4f00' },
   { v: '✅ Готово', bg: '#c9eef0', fg: '#0e6b70' },
   { v: '❌ Отменено', bg: '#eeeeee', fg: '#777777' },
 ];
+const ZS_ST_OLD = { '📤 Отдано': '📤 Отдано подрядчику' };   // прежние названия → новые
+const ZS_ST_VER = '2';                                        // меняется, когда меняется список статусов
 
 // Номер колонки «Статус» (ищем по заголовку правее данных) или 0.
 function zsStatusCol_(sh, L) {
@@ -595,23 +601,49 @@ function zsEnsureStatusCol_(sh, L) {
   }
   sh.getRange(1, L.ru).copyTo(sh.getRange(1, c), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
   sh.getRange(1, c).setValue('Статус');
-  sh.setColumnWidth(c, 130);
+  sh.setColumnWidth(c, 150);
+  zsStatusFormat_(sh, c);
+  return c;
+}
+
+// Список и цвета в колонке «Статус»; старые названия статусов меняет на новые. Свои правила таблицы не трогает.
+function zsStatusFormat_(sh, c) {
   const rng = sh.getRange(2, c, Math.max(sh.getMaxRows() - 1, 1), 1);
   rng.setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInList(ZS_ST.map(function (x) { return x.v; }), true).setAllowInvalid(true).build());
-  const rules = sh.getConditionalFormatRules();
+  const ours = {};
+  ZS_ST.forEach(function (x) { ours[x.v] = true; });
+  Object.keys(ZS_ST_OLD).forEach(function (k) { ours[k] = true; });
+  const rules = sh.getConditionalFormatRules().filter(function (r) {
+    try {
+      const b = r.getBooleanCondition();
+      const v = b && b.getCriteriaValues && b.getCriteriaValues()[0];
+      return !(v && ours[v] && r.getRanges().some(function (g) { return g.getColumn() === c; }));
+    } catch (e) { return true; }
+  });
   ZS_ST.forEach(function (x) {
     rules.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo(x.v).setBackground(x.bg).setFontColor(x.fg).setRanges([rng]).build());
   });
   sh.setConditionalFormatRules(rules);
-  return c;
+  const n = sh.getLastRow() - 1;
+  if (n > 0) {
+    const vals = sh.getRange(2, c, n, 1).getValues();
+    vals.forEach(function (r, i) { const nv = ZS_ST_OLD[zs_s(r[0])]; if (nv) sh.getRange(i + 2, c).setValue(nv); });
+  }
+  zsProps_().setProperty('zs_st_' + sh.getSheetId(), ZS_ST_VER);
 }
+
+// Колонка есть, но список статусов в ней старый — обновляем один раз.
+function zsStatusFresh_(sh, c) {
+  if (zsProps_().getProperty('zs_st_' + sh.getSheetId()) !== ZS_ST_VER) zsStatusFormat_(sh, c);
+}
+function zsStatusName_(v) { v = zs_s(v); return ZS_ST_OLD[v] || v; }
 
 // Все языки переведены → «✅ Готово», если статус пустой, «Отдано» или «Уточняем». Колонку сам не создаёт.
 function zsAutoDone_(sh, L, row) {
   const c = zsStatusCol_(sh, L);
   if (!c) return;
-  const cell = sh.getRange(row, c), cur = zs_s(cell.getValue());
+  const cell = sh.getRange(row, c), cur = zsStatusName_(cell.getValue());
   if (!cur || cur === ZS_ST[0].v || cur === ZS_ST[1].v) cell.setValue(ZS_ST[2].v);
 }
 
@@ -626,6 +658,7 @@ function zsSetStatus(items, status) {
     const sh = zsSheet_(k === 'баннер' ? ZS_CFG.BANNER : ZS_CFG.PUSH);
     if (!sh) return;
     const c = zsEnsureStatusCol_(sh, zsLayout_(sh));
+    zsStatusFresh_(sh, c);
     by[k].forEach(function (r) { sh.getRange(r, c).setValue(status); n++; });
   });
   return n;
@@ -636,6 +669,7 @@ function zsAddStatusColumn() {
   [zsSheet_(ZS_CFG.PUSH), zsSheet_(ZS_CFG.BANNER)].forEach(function (sh) {
     if (!sh) return;
     const c = zsEnsureStatusCol_(sh, zsLayout_(sh));
+    zsStatusFormat_(sh, c);
     made.push('«' + sh.getName() + '» — колонка ' + sh.getRange(1, c).getA1Notation().replace(/\d+/, ''));
   });
   SpreadsheetApp.getUi().alert('Колонка «Статус» есть:\n' + made.join('\n') + '\n\nВыбирайте из списка: ' + ZS_ST.map(function (x) { return x.v; }).join(', ') +
@@ -688,7 +722,7 @@ function zsExport(from, to) {
   const reps = all.filter(function (x) { return x.rep; });
   const repRows = reps.map(function (x) {
     const inSum = x.rep.level !== 'fuzzy', lw = x.w * x.rep.covered.length;
-    return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, x.ru, LV[x.rep.level], x.rep.prev, x.rep.prev_ru, x.rep.covered.join(', '),
+    return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, x.ru, LV[x.rep.level], x.rep.prev, x.rep.prev_ru, zsNames_(x.rep.covered),
       x.w, x.rep.covered.length, lw, inSum ? Math.round(lw * d.rate) : 0, inSum ? 'да' : 'нет — проверить глазами'];
   });
   const sumW = repRows.reduce(function (s, r) { return s + (r[12] === 'да' ? r[10] : 0); }, 0);
@@ -696,7 +730,7 @@ function zsExport(from, to) {
   put('Повторы', [['Дата', 'Тип', 'Продукт', 'Текст RU', 'Чем отличается от прошлого', 'Уже было', 'Текст тогда', 'Можно было взять', 'Слов в тексте', 'Языков', 'Слов × языки', '₽ (оценка)', 'В сумме?']].concat(repRows),
     [100, 70, 110, 360, 120, 100, 360, 160, 90, 70, 100, 100, 150]);
   put('Все запросы', [['Дата', 'Тип', 'Продукт', 'Языки', 'Текст RU', 'Слов', 'Повтор']].concat(
-    all.map(function (x) { return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, x.langs.join(', '), x.ru, x.w, x.rep ? LV[x.rep.level] : '']; })),
+    all.map(function (x) { return [x.date, x.type === 'push' ? 'пуш' : 'баннер', x.product, zsNames_(x.langs), x.ru, x.w, x.rep ? LV[x.rep.level] : '']; })),
     [100, 70, 120, 200, 420, 60, 120]);
   return { url: out.getUrl(), name: out.getName() };
 }
