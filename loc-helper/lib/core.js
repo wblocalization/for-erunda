@@ -464,7 +464,7 @@
     }
 
     function leftText(ms) {
-      var h = Math.floor(ms / 36e5), m = Math.round((ms - h * 36e5) / 6e4);
+      var total = Math.round(ms / 6e4), h = Math.floor(total / 60), m = total % 60;
       return h >= 1 ? h + " ч" + (h < 6 && m ? " " + m + " мин" : "") : Math.max(m, 1) + " мин";
     }
 

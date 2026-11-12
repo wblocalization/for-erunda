@@ -1,0 +1,21 @@
+{
+  "bandUrl": "https://band.wb.ru",
+  "bandToken": "ТОКЕН_БОТА_ИЛИ_ЛИЧНЫЙ_ТОКЕН_BAND",
+
+  "trackerToken": "API_ТОКЕН_TRACKER",
+  "trackerLogin": "ваш.логин",
+  "sampleIssue": "LOCAL-2210",
+  "issueUrl": "https://tracker.wb.ru/n/EDITORS/issues?previewIssueId={code}",
+
+  "managers": ["ваш.логин.в.band"],
+  "channels": [],
+  "prefix": "!",
+  "reactionTrigger": "",
+  "defaultType": "Локализация",
+
+  "reminders": {
+    "enabled": false,
+    "hoursBefore": [24, 3],
+    "users": []
+  }
+}
