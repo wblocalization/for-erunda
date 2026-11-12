@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loc Helper — настройки</title>
+<link rel="stylesheet" href="page.css">
+</head>
+<body class="options">
+<h1>Loc Helper</h1>
+<p class="hint">Задачи в Tracker из брифов в Band, подзадачи по языкам, дедлайны и напоминания.</p>
+
+<div class="card">
+  <h2>Подключение к Tracker</h2>
+  <div id="connected" hidden>
+    <div class="note ok" id="connInfo"></div>
+    <dl id="connDetails"></dl>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn" id="disconnect">Отключить и стереть токен</button>
+    </div>
+  </div>
+  <form id="connectForm" hidden>
+    <label class="f">API-токен
+      <input type="password" id="token" autocomplete="off" spellcheck="false" required>
+      <span class="hint">Создаётся в вашем профиле Tracker. Хранится только в этом браузере и отправляется только на tracker.wb.ru.</span>
+    </label>
+    <label class="f">Номер любой задачи локализации
+      <input type="text" id="sample" placeholder="LOCAL-2210" required>
+      <span class="hint">По ней расширение узнает пространство, проект, типы задач и поле «Дедлайн».</span>
+    </label>
+    <label class="f">Логин в Tracker (необязательно)
+      <input type="text" id="login" autocomplete="off" placeholder="нужен, только если токен не принимается без него">
+    </label>
+    <div class="actions"><button class="btn primary" id="connect" type="submit">Подключить</button></div>
+  </form>
+  <div class="note err" id="connError" hidden></div>
+</div>
+
+<div class="card" id="prefs" hidden>
+  <h2>Задачи и напоминания</h2>
+  <div class="row">
+    <label class="f">Кто я
+      <select id="me"></select>
+      <span class="hint">Список собран из исполнителей и авторов задач проекта.</span>
+    </label>
+    <label class="f">Какие задачи показывать
+      <select id="scope">
+        <option value="all">все открытые в проекте</option>
+        <option value="executor">где я исполнитель</option>
+        <option value="creator">где я автор</option>
+      </select>
+    </label>
+  </div>
+  <div class="row">
+    <label class="f">Напоминать за (часов до дедлайна)
+      <input type="text" id="hours" placeholder="24, 3">
+      <span class="hint">Через запятую. Например: 24, 5, 3.</span>
+    </label>
+    <label class="f">Время дедлайна, если в брифе только дата
+      <input type="time" id="deadlineTime">
+    </label>
+  </div>
+  <label class="c"><input type="checkbox" id="remindAll"> Напоминать по всем показанным задачам, а не только по отмеченным колокольчиком</label>
+  <label class="f">Ссылка на задачу
+    <input type="text" id="urlTemplate" spellcheck="false">
+    <span class="hint">{code} заменяется на номер задачи. Подставится само, когда вы откроете любую задачу в Tracker.</span>
+  </label>
+  <div class="actions">
+    <button class="btn primary" id="save">Сохранить</button>
+    <button class="btn" id="test">Показать пробное напоминание</button>
+    <span class="hint" id="saved" role="status"></span>
+  </div>
+  <div class="note err" id="prefsError" hidden></div>
+</div>
+<script src="options.js"></script>
+</body>
+</html>

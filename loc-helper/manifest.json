@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Loc Helper",
+  "version": "0.1.0",
+  "description": "Помощник локализации: задачи в Tracker из брифов в Band, подзадачи по языкам, дедлайны и напоминания.",
+  "permissions": ["storage", "alarms", "notifications"],
+  "host_permissions": ["https://tracker.wb.ru/*", "https://band.wb.ru/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://band.wb.ru/*"],
+      "js": ["lib/brief.js", "lib/ui.js", "band.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://tracker.wb.ru/*"],
+      "js": ["lib/brief.js", "lib/ui.js", "tracker.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "Loc Helper",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+  },
+  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+}
