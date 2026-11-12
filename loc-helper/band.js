@@ -71,14 +71,15 @@
     var best = null;
     thread.posts.forEach(function (p) {
       var parsed = B.parseBrief(p.message);
-      if (parsed.found >= 2) best = { post: p, parsed: parsed };
+      // Новый бриф в треде засчитываем, только если его прислал автор первого сообщения.
+      if (parsed.found >= 2 && p.user_id === thread.posts[0].user_id) best = { post: p, parsed: parsed };
     });
     return best || { post: thread.posts[0], parsed: B.parseBrief(thread.posts[0].message) };
   }
 
   function describe(thread, briefPost, withThread) {
     var files = thread.posts.reduce(function (n, p) { return n + (p.file_ids ? p.file_ids.length : 0); }, 0);
-    var out = [briefPost.message.trim(), "", "---", "Бриф в Band: " + thread.link, "Заказчик: " + userName(thread.users[briefPost.user_id])];
+    var out = [B.digest(briefPost.message, B.parseBrief(briefPost.message)), "", "---", "Бриф в Band: " + thread.link, "Заказчик: " + userName(thread.users[briefPost.user_id])];
     if (files) out.push("Вложений в треде: " + files + " (смотрите по ссылке)");
     if (withThread) {
       var rest = thread.posts.filter(function (p) { return p.id !== briefPost.id && p.message.trim(); });
