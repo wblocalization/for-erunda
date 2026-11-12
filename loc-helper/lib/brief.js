@@ -134,10 +134,10 @@
     return null;
   }
 
-  // "2026-11-20" + "18:00" → «20.11.2026 18:00», как ждёт Tracker.
+  // "2026-11-20" + "18:00" (по местному времени) → "2026-11-20T15:00:00Z": Tracker принимает дату только в RFC 3339.
   function toTrackerDate(isoDate, time) {
-    var p = isoDate.split("-");
-    return p[2] + "." + p[1] + "." + p[0] + " " + (time || "18:00");
+    var p = isoDate.split("-"), t = (time || "18:00").split(":");
+    return new Date(+p[0], +p[1] - 1, +p[2], +t[0], +t[1]).toISOString().replace(/\.\d+Z$/, "Z");
   }
 
   // Срочность дедлайна: просрочен, сегодня, завтра, позже.

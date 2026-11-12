@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Loc Helper",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Помощник локализации: задачи в Tracker из брифов в Band, подзадачи по языкам, дедлайны и напоминания.",
   "permissions": ["storage", "alarms", "notifications"],
   "host_permissions": ["https://tracker.wb.ru/*", "https://band.wb.ru/*"],
