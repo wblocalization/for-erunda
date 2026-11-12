@@ -118,8 +118,31 @@
     m.foot.appendChild(el("button.btn.primary", { text: "Открыть настройки", onclick: function () { U.send("openOptions"); m.close(); } }));
   }
 
+  function today() {
+    var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+  }
+
   function buildForm(m, st, thread) {
-    var picked = pickBrief(thread), parsed = picked.parsed;
+    var picked = pickBrief(thread), parsed = picked.parsed, CODE = /^[A-ZА-Я0-9_]+-\d+/i;
+
+    // Куда отправить: новая задача, подзадача в свой тикет или комментарий в существующий.
+    var mode = el("select", {}, [
+      el("option", { value: "new", text: "Новая задача" }),
+      el("option", { value: "sub", text: "Подзадача в тикет…" }),
+      el("option", { value: "comment", text: "Комментарий в тикет…" })
+    ]);
+    var target = el("input", { type: "text", placeholder: "номер или название тикета" });
+    var targets = el("datalist", { id: "loc-targets" });
+    var mineFirst = st.issues.slice().sort(function (a, b) {
+      var am = st.me && a.executorId === st.me.id ? 0 : 1, bm = st.me && b.executorId === st.me.id ? 0 : 1;
+      return am - bm || a.name.localeCompare(b.name, "ru");
+    });
+    mineFirst.forEach(function (it) { targets.appendChild(el("option", { value: it.id + " · " + it.name })); });
+    target.setAttribute("list", "loc-targets");
+    var targetField = U.field("Тикет", target);
+    mode.value = remember("mode") || "new";
+
     var name = el("input", { type: "text", value: parsed.title || "Перевод", maxLength: 250 });
     var type = el("select"), subType = el("select"), executor = el("select");
     st.types.forEach(function (t) { type.appendChild(el("option", { value: t.alias, text: t.name })); });
@@ -130,10 +153,40 @@
     if (remember("type")) type.value = remember("type");
     if (remember("subType")) subType.value = remember("subType");
     if (!type.value && st.types[0]) type.value = st.types[0].alias;
+    // Исполнитель по умолчанию — тот, кто нажал кнопку.
+    if (st.me) executor.value = st.me.id;
 
     var date = el("input", { type: "date", value: parsed.deadline || "" });
+    var start = el("input", { type: "date", value: today() });
+    var end = el("input", { type: "date", value: parsed.deadline || "" });
+    var endTouched = false;
+    end.addEventListener("input", function () { endTouched = true; });
+    date.addEventListener("input", function () { if (!endTouched) end.value = date.value; });
+
+    // Поля-списки выбранного типа задачи: приоритет, бизнес-заказчик, формат, страны…
+    var extra = el("div.section"), inputs = [], kept = {};
+    function drawExtra() {
+      inputs.forEach(function (i) { kept[i.def.id] = i.input.get(); });
+      var defs = (st.typeFields[type.value] || []).filter(function (d) { return d.type === "choice"; });
+      var hints = B.suggest(parsed, picked.post.message, defs);
+      extra.textContent = "";
+      inputs = defs.map(function (d) {
+        var input = U.choiceInput(d, kept[d.id] || hints[d.id] || []);
+        var guessed = !kept[d.id] && hints[d.id] && !d.required;
+        extra.appendChild(U.field(d.title + (guessed ? " (подставлено по брифу, проверьте)" : ""), input.el));
+        return { def: d, input: input };
+      });
+    }
+    type.addEventListener("change", drawExtra);
+    drawExtra();
+
     var langs = U.langPicker(parsed.languages);
-    var subs = el("input", { type: "checkbox", checked: remember("subs") === "1" });
+    var subs = el("select", {}, [
+      el("option", { value: "", text: "не создавать" }),
+      el("option", { value: "lang", text: "на каждый выбранный язык" }),
+      el("option", { value: "lang+edit", text: "на каждый язык: перевод и редактура" })
+    ]);
+    subs.value = remember("subsMode") || "";
     var whole = el("input", { type: "checkbox" });
     var desc = el("textarea", { value: describe(thread, picked.post, false) });
     var descTouched = false;
@@ -151,7 +204,7 @@
       var ask = "Привет! Чтобы взять задачу в работу, дополните, пожалуйста, бриф: " + parsed.missing.join(", ") +
         ". Пришлите обновлённый бриф целиком в этом треде.";
       m.body.appendChild(el("div.note.warn", {}, [
-        "В брифе не нашлось: " + parsed.missing.join(", ") + ". ",
+        "В брифе не нашлось: " + parsed.missing.join(", ") + ". Это подсказка: задачу можно создать и так. ",
         el("a", { href: "#", text: "Скопировать ответ заказчику", onclick: function (e) {
           e.preventDefault();
           navigator.clipboard.writeText(ask).then(function () { U.toast("Ответ скопирован, вставьте его в тред."); });
@@ -160,44 +213,68 @@
     }
     if (!st.deadlineField) m.body.appendChild(el("div.note.warn", { text: "В задаче-образце нет поля «Дедлайн», поэтому срок попадёт только в описание." }));
 
-    m.body.appendChild(U.field("Название", name));
-    m.body.appendChild(el("div.row", {}, [U.field("Тип задачи", type), U.field("Исполнитель", executor)]));
-    m.body.appendChild(el("div.row", {}, [
+    // Всё, что относится только к новой задаче (в комментарии не нужно).
+    var taskOnly = el("div.section", {}, [
+      el("div.row", {}, [U.field("Тип задачи", type), U.field("Исполнитель", executor)]),
       U.field("Дедлайн" + (parsed.deadlineRaw ? " (в брифе: " + parsed.deadlineRaw.split("\n")[0].slice(0, 40) + ")" : ""), date),
-      U.field("Тип подзадач", subType)
-    ]));
-    m.body.appendChild(U.field("Языки", langs.el));
-    m.body.appendChild(el("label.check", {}, [subs, "Создать подзадачу на каждый выбранный язык"]));
+      el("div.row", {}, [U.field("Дата начала", start), U.field("Дата завершения", end)]),
+      extra,
+      U.field("Языки", langs.el),
+      el("div.row", {}, [U.field("Подзадачи", subs), U.field("Тип подзадач", subType)])
+    ]);
+
+    m.body.appendChild(el("div.row", {}, [U.field("Куда отправить", mode), targetField]));
+    m.body.appendChild(targets);
+    m.body.appendChild(U.field("Название", name));
+    m.body.appendChild(taskOnly);
     m.body.appendChild(U.field("Описание", desc));
     m.body.appendChild(el("label.check", {}, [whole, "Добавить в описание всю переписку из треда"]));
     m.body.appendChild(el("label.check", {}, [reply, "Написать в тред ссылку на задачу"]));
     m.body.appendChild(el("label.check", {}, [react, "Поставить ✅ на бриф"]));
     m.body.appendChild(error);
 
-    var go = el("button.btn.primary", { text: "Создать задачу" });
+    var go = el("button.btn.primary");
     m.foot.appendChild(el("span.grow", { text: st.project ? st.project.name + " · " + st.ns.name : "" }));
     m.foot.appendChild(el("button.btn", { text: "Отмена", onclick: m.close }));
     m.foot.appendChild(go);
 
+    function goLabel() { return mode.value === "comment" ? "Добавить комментарий" : mode.value === "sub" ? "Создать подзадачу" : "Создать задачу"; }
+    function onMode() {
+      targetField.hidden = mode.value === "new";
+      taskOnly.hidden = mode.value === "comment";
+      target.value = mode.value === "new" ? "" : (remember("target." + mode.value) || "");
+      go.textContent = goLabel();
+    }
+    mode.addEventListener("change", onMode);
+    onMode();
+
     go.addEventListener("click", function () {
-      var chosen = langs.get();
+      var chosen = langs.get(), code = (target.value.trim().match(CODE) || [""])[0].toUpperCase();
+      var isComment = mode.value === "comment", wantSubs = !isComment && subs.value;
       error.hidden = true;
       if (!name.value.trim()) return showError("Заполните название.");
-      if (!type.value) return showError("Выберите тип задачи.");
-      if (subs.checked && !chosen.length) return showError("Чтобы создать подзадачи, выберите хотя бы один язык.");
-      if (subs.checked && chosen.length > 5 && !confirm("Будет создано задач: " + (chosen.length + 1) + ". Продолжить?")) return;
-      remember("type", type.value); remember("subType", subType.value); remember("subs", subs.checked ? "1" : "0");
+      if (mode.value !== "new" && !code) return showError("Укажите тикет: начните печатать номер или название и выберите из списка.");
+      if (!isComment && !type.value) return showError("Выберите тип задачи.");
+      if (wantSubs && !chosen.length) return showError("Чтобы создать подзадачи, выберите хотя бы один язык.");
+      var count = wantSubs ? chosen.length * (subs.value === "lang+edit" ? 2 : 1) : 0;
+      if (count > 5 && !confirm("Будет создано задач: " + (count + 1) + ". Продолжить?")) return;
+      remember("mode", mode.value); remember("type", type.value); remember("subType", subType.value); remember("subsMode", subs.value);
       remember("reply", reply.checked ? "1" : "0"); remember("react", react.checked ? "1" : "0");
+      if (mode.value !== "new") remember("target." + mode.value, target.value.trim());
+      var choices = {};
+      inputs.forEach(function (i) { choices[i.def.id] = i.input.get(); });
       go.disabled = true;
-      go.textContent = "Создаю…";
+      go.textContent = "Отправляю…";
       U.send("create", { input: {
-        name: name.value.trim(), description: desc.value, typeAlias: type.value, subTypeAlias: subType.value,
-        deadline: date.value || null, executorId: executor.value || null, languages: subs.checked ? chosen : []
+        mode: mode.value, targetCode: code, name: name.value.trim(), description: desc.value,
+        typeAlias: type.value, subTypeAlias: subType.value, executorId: executor.value || null,
+        deadline: date.value || null, start: start.value || null, end: end.value || null, choices: choices,
+        languages: wantSubs ? chosen : [], withEditing: subs.value === "lang+edit"
       } }).then(function (res) {
         return announce(thread, res, reply.checked, react.checked).then(function (warn) { done(m, res, warn); });
       }).catch(function (e) {
         go.disabled = false;
-        go.textContent = "Создать задачу";
+        go.textContent = goLabel();
         showError(e.message);
       });
     });
@@ -209,7 +286,7 @@
   function announce(thread, res, reply, react) {
     var jobs = [];
     if (reply) {
-      var text = "Задача в Tracker: [" + res.id + "](" + res.url + ")";
+      var text = res.comment ? "Добавлено в тикет Tracker: [" + res.id + "](" + res.url + ")" : "Задача в Tracker: [" + res.id + "](" + res.url + ")";
       if (res.subs.length) text += "\nПодзадачи: " + res.subs.map(function (s) { return s.lang + " — [" + s.id + "](" + s.url + ")"; }).join(", ");
       jobs.push(api("/posts", "POST", { channel_id: thread.channelId, root_id: thread.rootId, message: text }));
     }
@@ -223,10 +300,13 @@
   function done(m, res, warn) {
     m.body.textContent = "";
     m.foot.textContent = "";
-    m.body.appendChild(el("div.note.ok", {}, ["Создана задача ", el("a", { href: res.url, target: "_blank", rel: "noopener", text: res.id }),
-      res.subs.length ? " и подзадач: " + res.subs.length + "." : "."]));
+    var link = el("a", { href: res.url, target: "_blank", rel: "noopener", text: res.id });
+    m.body.appendChild(el("div.note.ok", {}, res.comment ? ["Бриф добавлен комментарием в ", link, "."] :
+      [res.parent ? "Создана подзадача " : "Создана задача ", link, res.parent ? " в тикете " + res.parent : "",
+        res.subs.length ? " и подзадач: " + res.subs.length + "." : "."]));
+    if (res.unfilled.length) m.body.appendChild(el("div.note.warn", { text: "Остались пустыми: " + res.unfilled.join(", ") + "." }));
     if (res.errors.length) m.body.appendChild(el("div.note.err", { text: "Не удалось создать подзадачи: " + res.errors.join("; ") }));
-    if (warn) m.body.appendChild(el("div.note.warn", { text: "Задача создана, но в тред написать не получилось: " + warn }));
+    if (warn) m.body.appendChild(el("div.note.warn", { text: "В Tracker всё создано, но в тред написать не получилось: " + warn }));
     m.foot.appendChild(el("button.btn.primary", { text: "Готово", onclick: m.close }));
   }
 

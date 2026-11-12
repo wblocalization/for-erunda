@@ -312,6 +312,14 @@
       return out;
     }
 
+    // В подзадаче на один язык в поле «Страны» оставляем страну этого языка, если она есть в списке.
+    function forLanguage(choices, lang, s, typeAlias) {
+      var defs = (s.typeFields || {})[typeAlias] || [], out = Object.assign({}, choices);
+      var own = B.suggest({ languages: [lang], product: "" }, "", defs.filter(function (d) { return /стран/i.test(d.title); }));
+      Object.keys(own).forEach(function (id) { out[id] = own[id]; });
+      return out;
+    }
+
     // Из брифа: новая задача, подзадача в выбранный тикет или комментарий в существующий.
     // По желанию — подзадачи на каждый язык (и отдельно на редактуру).
     async function createFromBrief(input) {
@@ -332,13 +340,15 @@
       var parent = await postIssue(body), subs = [], errors = [];
 
       var has = function (alias) { return (s.types || []).some(function (t) { return t.alias === alias; }); };
-      var stages = [{ suffix: "", type: input.subTypeAlias || input.typeAlias }];
+      // Перевод и редактура — разные типы задач, если они заведены в проекте.
+      var first = input.subTypeAlias || (input.withEditing && has("perevod") ? "perevod" : input.typeAlias);
+      var stages = [{ suffix: "", type: first }];
       if (input.withEditing) stages.push({ suffix: " (редактура)", type: has("redaktura") ? "redaktura" : stages[0].type });
       for (var i = 0; i < (input.languages || []).length; i++) {
         for (var j = 0; j < stages.length; j++) {
           var lang = input.languages[i], title = input.name + " — " + lang.name + stages[j].suffix;
           try {
-            var sub = issueBody(Object.assign({}, input, { name: title, executorId: null }), s, settings, stages[j].type);
+            var sub = issueBody(Object.assign({}, input, { name: title, executorId: null, choices: forLanguage(input.choices, lang, s, stages[j].type) }), s, settings, stages[j].type);
             sub.parentIssueId = parent.id;
             var created = await postIssue(sub);
             subs.push({ id: created.id, lang: lang.name + stages[j].suffix, url: link(created.id) });

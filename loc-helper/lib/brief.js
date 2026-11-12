@@ -215,6 +215,40 @@
     return (head.length ? head.join("\n") + "\n\n" : "") + "Сообщение заказчика:\n" + clean;
   }
 
+  // Что можно предложить в поля-списки Tracker по брифу. Только то, что в брифе сказано прямо:
+  // страны — по названным языкам, формат — по словам в тексте, заказчик — при точном совпадении с продуктом.
+  var COUNTRY = {
+    en: "EN", ka: "Грузия", kk: "Казахстан", uz: "Узбекистан", ky: "Кыргызстан", hy: "Армения", tg: "Таджикистан",
+    az: "Азербайджан", am: "Эфиопия", tr: "Турция", zh: "Китай", he: "Израиль", be: "Беларусь", ar: "ОАЭ", ru: "Россия"
+  };
+  var FORMAT = [
+    ["Баннер", /баннер/], ["Пуш", /(?:^|[^а-яё])пуш/], ["Новость", /новост/], ["СМС", /(?:^|[^а-яёa-z])(?:смс|sms)/],
+    ["Email-рассылка", /e-?mail|рассылк|письм/], ["Лендинг", /лендинг/], ["Stories", /stories|сторис/],
+    ["Модалка", /модалк|модальн/], ["Поповер", /поповер/], ["Колокол", /колокол/], ["Презентация", /презентаци/]
+  ];
+
+  function suggest(parsed, text, defs) {
+    var out = {}, low = String(text || "").toLowerCase();
+    (defs || []).forEach(function (d) {
+      if (d.type !== "choice") return;
+      var find = function (label) {
+        return d.options.filter(function (o) { return o.label.trim().toLowerCase() === String(label).trim().toLowerCase(); })[0];
+      };
+      var picked = [];
+      if (/стран/i.test(d.title)) {
+        parsed.languages.forEach(function (l) { var o = COUNTRY[l.code] && find(COUNTRY[l.code]); if (o && picked.indexOf(o) < 0) picked.push(o); });
+      } else if (/формат/i.test(d.title)) {
+        FORMAT.forEach(function (f) { var o = f[1].test(low) && find(f[0]); if (o) picked.push(o); });
+      } else if (/заказчик/i.test(d.title) && parsed.product) {
+        var exact = find(parsed.product);
+        if (exact) picked.push(exact);
+      }
+      if (!picked.length && d.required) picked = d.defaults.slice(0, 1);
+      if (picked.length) out[d.id] = d.multiple ? picked : picked.slice(0, 1);
+    });
+    return out;
+  }
+
   // Значение поля «Дата» в Tracker («22.08.2026 09:00») или дата в ISO → число миллисекунд. Не дата — null.
   function parseTrackerDate(v) {
     if (v == null) return null;
@@ -253,7 +287,7 @@
 
   root.LocBrief = {
     LANGS: LANGS.map(function (l) { return { code: l[0], name: l[1] }; }),
-    parseBrief: parseBrief, parseDate: parseDate, language: language, cleanText: cleanText, digest: digest,
+    parseBrief: parseBrief, parseDate: parseDate, language: language, cleanText: cleanText, digest: digest, suggest: suggest,
     parseTrackerDate: parseTrackerDate, toTrackerDate: toTrackerDate,
     urgency: urgency, formatDeadline: formatDeadline
   };

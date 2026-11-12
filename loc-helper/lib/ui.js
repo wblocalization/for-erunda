@@ -23,6 +23,8 @@
     ".check{display:flex;align-items:center;gap:8px;font-weight:400;font-size:13.5px;color:#1f1b2e;cursor:pointer}" +
     ".check input{width:16px;height:16px;accent-color:#7a5af8;margin:0}" +
     ".chips{display:flex;flex-wrap:wrap;gap:6px}" +
+    "[hidden]{display:none!important}" +
+    ".section{display:grid;gap:12px}" +
     ".chip{border:1px solid #d6d2e6;background:#fff;border-radius:999px;padding:4px 11px;font:inherit;font-size:13px;cursor:pointer;color:#4a4660}" +
     ".chip[aria-pressed=true]{background:#7a5af8;border-color:#7a5af8;color:#fff}" +
     ".chip.add{border-style:dashed}" +
@@ -112,6 +114,63 @@
     return { el: box, get: function () { return order.filter(function (l) { return chosen[l.code]; }); } };
   }
 
+  // Поле-список из Tracker. Короткий список с несколькими значениями — чипы; один вариант — выпадающий список;
+  // длинный список (сотни заказчиков) — строка поиска с подсказками.
+  var seq = 0;
+  function choiceInput(def, selected) {
+    var chosen = (selected || []).slice(), box = el("div"), byLabel = {};
+    def.options.forEach(function (o) { byLabel[o.label.trim().toLowerCase()] = o; });
+    function has(o) { return chosen.some(function (c) { return c.id === o.id; }); }
+
+    if (!def.multiple && def.options.length <= 30) {
+      var sel = el("select");
+      if (!def.required) sel.appendChild(el("option", { value: "", text: "не выбрано" }));
+      def.options.forEach(function (o) { sel.appendChild(el("option", { value: o.id, text: o.label })); });
+      sel.value = chosen[0] ? chosen[0].id : (def.required && def.options[0] ? sel.value : "");
+      box.appendChild(sel);
+      return { el: box, get: function () { return def.options.filter(function (o) { return o.id === sel.value; }); } };
+    }
+
+    var chips = el("div.chips"), search = null;
+    function draw() {
+      chips.textContent = "";
+      var shown = def.multiple && def.options.length <= 20 ? def.options : chosen;
+      shown.forEach(function (o) {
+        chips.appendChild(el("button.chip", {
+          type: "button", text: o.label + (shown === chosen ? " ×" : ""), "aria-pressed": has(o) ? "true" : "false",
+          title: shown === chosen ? "Убрать" : "",
+          onclick: function () {
+            if (has(o)) chosen = chosen.filter(function (c) { return c.id !== o.id; });
+            else chosen = def.multiple ? chosen.concat([o]) : [o];
+            draw();
+          }
+        }));
+      });
+      chips.hidden = !shown.length;
+    }
+    if (!(def.multiple && def.options.length <= 20)) {
+      var listId = "loc-dl-" + (++seq), dl = el("datalist", { id: listId });
+      def.options.forEach(function (o) { dl.appendChild(el("option", { value: o.label })); });
+      search = el("input", { type: "text", placeholder: "начните печатать: " + def.options.length + " вариантов" });
+      search.setAttribute("list", listId);
+      var take = function () {
+        var o = byLabel[search.value.trim().toLowerCase()];
+        if (!o) return;
+        if (!has(o)) chosen = def.multiple ? chosen.concat([o]) : [o];
+        search.value = "";
+        draw();
+      };
+      search.addEventListener("input", take);
+      search.addEventListener("change", take);
+      box.appendChild(search);
+      box.appendChild(dl);
+      chips.style.marginTop = "6px";
+    }
+    box.appendChild(chips);
+    draw();
+    return { el: box, get: function () { return chosen.slice(); } };
+  }
+
   function toast(text, link) {
     var t = el("div.toast", { role: "status" }, [text, link ? " " : null, link ? el("a", { href: link.url, target: "_blank", rel: "noopener", text: link.text }) : null]);
     layer().appendChild(t);
@@ -132,5 +191,5 @@
     });
   }
 
-  root.LocUI = { el: el, field: field, modal: modal, langPicker: langPicker, toast: toast, send: send, layer: layer };
+  root.LocUI = { el: el, field: field, modal: modal, langPicker: langPicker, choiceInput: choiceInput, toast: toast, send: send, layer: layer };
 })(self);
