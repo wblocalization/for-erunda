@@ -45,7 +45,7 @@ const handlers = {
   status: () => core.status(),
   connect: (m) => core.connect(m.token, m.sample, m.login).then((s) => tick(false).then(() => s)),
   disconnect: async () => { await chrome.storage.local.clear(); await tick(false); return core.status(); },
-  sync: async () => { await core.sync(); await tick(false); return core.status(); },
+  sync: async () => { await core.refresh(); await tick(false); return core.status(); },
   create: (m) => core.createFromBrief(m.input).then((r) => tick(false).then(() => r)),
   clone: (m) => core.cloneForLanguages(m.code, m.languages, m.opts).then((r) => tick(false).then(() => r)),
   setReminder: async (m) => {

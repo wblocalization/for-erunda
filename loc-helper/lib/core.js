@@ -99,6 +99,28 @@
       return index;
     }
 
+    // Поля типа задачи в коротком виде для формы: только выпадающие списки и даты.
+    // Поля с людьми (Reviewer) и числа (SP) заполняет исполнитель по ходу работы, в форму их не берём.
+    function formFields(list) {
+      var out = [];
+      (list || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).forEach(function (f) {
+        var snaps = f.fieldSnapshots || {}, key = Object.keys(snaps)[0], snap = key && snaps[key];
+        if (!snap || !snap.id) return;
+        var meta = snap.meta || {}, input = meta.input || {}, body = input[input.kind] || {};
+        var pick = function (v) { return { id: v.id, label: v.label }; };
+        if (f.typeCode === "choice") {
+          out.push({
+            id: snap.id, title: snap.title, type: "choice", multiple: !!body.multiple,
+            required: !!(body.required || (meta.restrictions || {}).required),
+            options: (body.variants || []).map(pick), defaults: (body.defaultValues || []).map(pick)
+          });
+        } else if (f.typeCode === "datetime") {
+          out.push({ id: snap.id, title: snap.title, type: "datetime" });
+        }
+      });
+      return out;
+    }
+
     function isDeadlineTitle(title) { return /дедлайн|deadline|срок/i.test(title || ""); }
 
     function personName(u) {
@@ -117,7 +139,7 @@
       var deadline = null, deadlineFieldId = null;
       (issue.fields || []).forEach(function (f) {
         var known = index[f.id];
-        if (deadlineIds.indexOf(f.id) >= 0 || (known && isDeadlineTitle(known.title))) {
+        if (deadlineIds.indexOf(f.id) >= 0 || isDeadlineTitle(f.name) || (known && isDeadlineTitle(known.title))) {
           var ts = B.parseTrackerDate(f.value);
           if (ts) { deadline = ts; deadlineFieldId = f.id; }
         }
@@ -177,8 +199,9 @@
 
     // ---------- Список задач ----------
     async function sync() {
-      var s = await store.get(["auth", "ns", "project", "fieldIndex", "deadlineIds", "types", "settings", "me", "people"]);
+      var s = await store.get(["auth", "ns", "project", "fieldIndex", "deadlineIds", "types", "settings", "me", "people", "typeFields"]);
       if (!s.auth) return null;
+      var typeFields = s.typeFields || {};
       var settings = Object.assign({}, DEFAULT_SETTINGS, s.settings), index = s.fieldIndex || {};
       var query = { namespace_code: s.ns.code, project_code: s.project.code, limit: PAGE, sort: "updated_at", order: "DESC" };
       if (s.me && settings.scope === "executor") query.executor_id = s.me.id;
@@ -208,9 +231,21 @@
         await store.set({ lastError: e.message, lastSync: now() });
         throw e;
       }
+      // Поля типов задач нужны форме. Читаем один раз на тип; кнопка «Обновить» перечитывает заново.
+      var ids = Object.keys(types);
+      for (var i = 0; i < ids.length; i++) {
+        var t = types[ids[i]];
+        if (typeFields[t.alias] && !sync.refreshFields) continue;
+        try {
+          var fr = await api("GET", "/public-api/v1/issue-type/" + t.id + "/fields");
+          indexFields(fr && fr.fields, index);
+          typeFields[t.alias] = formFields(fr && fr.fields);
+        } catch (e) { /* форма покажет только общие поля */ }
+      }
+      sync.refreshFields = false;
       var sortByName = function (a, b) { return a.name.localeCompare(b.name, "ru"); };
       await store.set({
-        issues: issues, total: total, lastSync: now(), lastError: "", fieldIndex: index,
+        issues: issues, total: total, lastSync: now(), lastError: "", fieldIndex: index, typeFields: typeFields,
         types: Object.keys(types).map(function (k) { return types[k]; }).sort(sortByName),
         people: Object.keys(people).map(function (k) { return people[k]; }).sort(sortByName)
       });
@@ -222,7 +257,7 @@
       var settings = Object.assign({}, DEFAULT_SETTINGS, s.settings);
       return {
         connected: !!s.auth, sample: s.sample || "", ns: s.ns || null, project: s.project || null,
-        types: s.types || [], people: s.people || [], me: s.me || null, settings: settings,
+        types: s.types || [], people: s.people || [], me: s.me || null, settings: settings, typeFields: s.typeFields || {},
         issues: s.issues || [], reminders: s.reminders || {}, total: s.total || 0,
         lastSync: s.lastSync || 0, lastError: s.lastError || "",
         deadlineField: (s.deadlineIds || []).length > 0, now: now()
@@ -232,43 +267,90 @@
     function issueUrl(template, code) { return (template || DEFAULT_SETTINGS.urlTemplate).replace("{code}", code); }
 
     // ---------- Создание ----------
-    function deadlineField(s, isoDate, settings) {
-      var id = (s.deadlineIds || [])[0];
-      return id && isoDate ? [{ id: id, value: [B.toTrackerDate(isoDate, settings.deadlineTime)] }] : [];
-    }
-
     async function postIssue(body) {
       var r = await api("POST", "/public-api/v1/issue", null, body);
       return r && r.issue || r;
     }
 
-    // Задача из брифа + по желанию подзадачи на каждый язык.
-    async function createFromBrief(input) {
-      var s = await store.get(["ns", "project", "deadlineIds", "settings", "types"]);
-      var settings = Object.assign({}, DEFAULT_SETTINGS, s.settings);
-      var common = { projectAlias: s.project.alias, namespaceAlias: s.ns.alias, issueTypeAlias: input.typeAlias };
-      var body = Object.assign({ name: input.name, description: input.description || "" }, common);
-      var fields = deadlineField(s, input.deadline, settings);
+    function dayStart(isoDate) { return isoDate + "T00:00:00Z"; }
+    function dayEnd(isoDate) { return isoDate + "T23:59:59Z"; }
+
+    // Тело запроса на создание задачи из того, что выбрано в форме.
+    function issueBody(input, s, settings, typeAlias) {
+      var body = {
+        name: input.name, description: input.description || "",
+        projectAlias: s.project.alias, namespaceAlias: s.ns.alias, issueTypeAlias: typeAlias
+      };
+      var defs = (s.typeFields || {})[typeAlias] || [], fields = [], known = {};
+      defs.forEach(function (d) { known[d.id] = d; });
+      Object.keys(input.choices || {}).forEach(function (id) {
+        if (known[id] && input.choices[id].length) fields.push({ id: id, value: input.choices[id] });
+      });
+      // Обязательное поле без выбора получает значение по умолчанию (например, приоритет Normal).
+      defs.forEach(function (d) {
+        var set = fields.some(function (f) { return f.id === d.id; });
+        if (d.type === "choice" && d.required && !set && d.defaults.length) fields.push({ id: d.id, value: d.defaults });
+      });
+      var deadline = defs.filter(function (d) { return d.type === "datetime" && isDeadlineTitle(d.title); })[0];
+      var deadlineId = deadline ? deadline.id : (s.deadlineIds || [])[0];
+      if (deadlineId && input.deadline) fields.push({ id: deadlineId, value: [B.toTrackerDate(input.deadline, settings.deadlineTime)] });
       if (fields.length) body.fields = fields;
       if (input.executorId) body.executor = input.executorId;
+      if (input.start) body.startedAt = dayStart(input.start);
+      if (input.end) body.completedAt = dayEnd(input.end);
+      return body;
+    }
 
+    // Что в созданной задаче осталось пустым — показываем менеджеру, ничего не додумывая.
+    function unfilled(input, s, typeAlias) {
+      var out = [];
+      if (!input.executorId) out.push("Исполнитель");
+      if (!input.deadline) out.push("Дедлайн");
+      ((s.typeFields || {})[typeAlias] || []).forEach(function (d) {
+        if (d.type === "choice" && !d.required && !((input.choices || {})[d.id] || []).length) out.push(d.title);
+      });
+      return out;
+    }
+
+    // Из брифа: новая задача, подзадача в выбранный тикет или комментарий в существующий.
+    // По желанию — подзадачи на каждый язык (и отдельно на редактуру).
+    async function createFromBrief(input) {
+      var s = await store.get(["ns", "project", "deadlineIds", "settings", "types", "typeFields"]);
+      var settings = Object.assign({}, DEFAULT_SETTINGS, s.settings);
+      var link = function (id) { return issueUrl(settings.urlTemplate, id); };
+      var target = String(input.targetCode || "").trim().toUpperCase();
+      if (input.mode !== "new" && input.mode && !/^[A-ZА-Я0-9_]+-\d+$/.test(target)) throw fail("Укажите номер тикета, например LOCAL-2210.", 0);
+
+      if (input.mode === "comment") {
+        await api("POST", "/public-api/v1/issue/" + encodeURIComponent(target) + "/discussion", null,
+          { text: (input.name ? input.name + "\n\n" : "") + (input.description || ""), fileIds: [] });
+        return { id: target, url: link(target), comment: true, subs: [], errors: [], unfilled: [] };
+      }
+
+      var body = issueBody(input, s, settings, input.typeAlias);
+      if (input.mode === "sub") body.parentIssueId = target;
       var parent = await postIssue(body), subs = [], errors = [];
+
+      var has = function (alias) { return (s.types || []).some(function (t) { return t.alias === alias; }); };
+      var stages = [{ suffix: "", type: input.subTypeAlias || input.typeAlias }];
+      if (input.withEditing) stages.push({ suffix: " (редактура)", type: has("redaktura") ? "redaktura" : stages[0].type });
       for (var i = 0; i < (input.languages || []).length; i++) {
-        var lang = input.languages[i];
-        try {
-          var sub = Object.assign({}, body, { name: input.name + " — " + lang.name, parentIssueId: parent.id });
-          if (input.subTypeAlias) sub.issueTypeAlias = input.subTypeAlias;
-          delete sub.executor;
-          var created = await postIssue(sub);
-          subs.push({ id: created.id, lang: lang.name });
-        } catch (e) {
-          errors.push(lang.name + ": " + e.message);
+        for (var j = 0; j < stages.length; j++) {
+          var lang = input.languages[i], title = input.name + " — " + lang.name + stages[j].suffix;
+          try {
+            var sub = issueBody(Object.assign({}, input, { name: title, executorId: null }), s, settings, stages[j].type);
+            sub.parentIssueId = parent.id;
+            var created = await postIssue(sub);
+            subs.push({ id: created.id, lang: lang.name + stages[j].suffix, url: link(created.id) });
+          } catch (e) {
+            errors.push(lang.name + stages[j].suffix + ": " + e.message);
+          }
         }
       }
       sync().catch(function () {});
       return {
-        id: parent.id, url: issueUrl(settings.urlTemplate, parent.id), errors: errors,
-        subs: subs.map(function (x) { return { id: x.id, lang: x.lang, url: issueUrl(settings.urlTemplate, x.id) }; })
+        id: parent.id, url: link(parent.id), parent: input.mode === "sub" ? target : null,
+        subs: subs, errors: errors, unfilled: unfilled(input, s, input.typeAlias)
       };
     }
 
@@ -388,6 +470,7 @@
 
     return {
       connect: connect, sync: sync, status: status, createFromBrief: createFromBrief,
+      refresh: function () { sync.refreshFields = true; return sync(); },
       cloneForLanguages: cloneForLanguages, diagnose: diagnose, dueReminders: dueReminders, hotCount: hotCount, issueUrl: issueUrl
     };
   }
