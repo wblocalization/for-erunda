@@ -77,6 +77,7 @@ const handlers = {
     await store.set({ settings: Object.assign({}, s.settings, { urlTemplate: m.template, urlLearned: m.template }) });
     return true;
   },
+  diagnose: () => core.diagnose(),
   openOptions: () => { chrome.runtime.openOptionsPage(); return true; }
 };
 

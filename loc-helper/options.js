@@ -83,6 +83,20 @@
     }).catch(function (e) { fail("prefsError", e); }).then(function () { b.disabled = false; });
   });
 
+  $("diagnose").addEventListener("click", function () {
+    var b = $("diagnose");
+    $("connError").hidden = true;
+    b.disabled = true; b.textContent = "Собираю…";
+    send("diagnose").then(function (data) {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      a.download = "loc-helper-fields.json";
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    }).catch(function (e) { fail("connError", e); })
+      .then(function () { b.disabled = false; b.textContent = "Скачать описание полей"; });
+  });
+
   $("test").addEventListener("click", function () {
     chrome.notifications.create("loc-test-" + Date.now(), {
       type: "basic", iconUrl: "icons/icon128.png", title: "LOCAL-0000 · Пробная задача", message: "До дедлайна 3 ч (так выглядит напоминание)", priority: 2

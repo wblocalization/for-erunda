@@ -310,6 +310,30 @@
       return { source: src.id, made: made, errors: errors, withoutFields: withoutFields };
     }
 
+    // ---------- Диагностика ----------
+    // Что Tracker отдаёт про типы задач и их поля. Токена здесь нет; из задачи-образца берём только названия и поля.
+    async function diagnose() {
+      var s = await store.get(["sample", "types", "ns", "project", "deadlineIds", "authKind", "settings"]);
+      var out = { version: 1, ns: s.ns, project: s.project, authKind: s.authKind, deadlineIds: s.deadlineIds, urlTemplate: (s.settings || {}).urlTemplate || null, types: [], errors: [] };
+      try {
+        var it = await api("GET", "/public-api/v1/issue/" + encodeURIComponent(s.sample));
+        it = it.issue || it;
+        out.sample = {
+          id: it.id, name: it.name, issueType: it.issueType, state: it.state, fields: it.fields, tags: it.tags,
+          startedAt: it.startedAt || null, completedAt: it.completedAt || null, parentIssueId: it.parentIssueId,
+          keys: Object.keys(it)
+        };
+      } catch (e) { out.errors.push("sample: " + e.message); }
+      for (var i = 0; i < (s.types || []).length; i++) {
+        var t = s.types[i];
+        try {
+          var f = await api("GET", "/public-api/v1/issue-type/" + t.id + "/fields");
+          out.types.push({ id: t.id, name: t.name, alias: t.alias, fields: f && f.fields || f });
+        } catch (e) { out.errors.push(t.name + ": " + e.message); }
+      }
+      return out;
+    }
+
     // ---------- Напоминания ----------
     function inScope(issue, me, scope) {
       if (!me || scope === "all") return true;
@@ -364,7 +388,7 @@
 
     return {
       connect: connect, sync: sync, status: status, createFromBrief: createFromBrief,
-      cloneForLanguages: cloneForLanguages, dueReminders: dueReminders, hotCount: hotCount, issueUrl: issueUrl
+      cloneForLanguages: cloneForLanguages, diagnose: diagnose, dueReminders: dueReminders, hotCount: hotCount, issueUrl: issueUrl
     };
   }
 
