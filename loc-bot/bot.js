@@ -214,8 +214,8 @@ function createBot(deps) {
     }));
     pending.delete(thread.rootId);
     band.react(me.id, thread.rootId, "eyes").catch(() => {});
-    if (res.comment) return "Добавил бриф комментарием в " + linkTo(res.id, res.url) + ".";
-    const out = [(res.parent ? "Создал подзадачу " : "Создал задачу ") + linkTo(res.id, res.url) + (res.parent ? " в тикете " + res.parent : "") + "."];
+    if (res.comment) return "Привет! Задача в работе. Тикет в трекере: " + linkTo(res.id, res.url);
+    const out = ["Привет! Задача в работе. Тикет в трекере: " + linkTo(res.id, res.url) + (res.parent ? " (подзадача в " + res.parent + ")" : "")];
     if (res.subs.length) out.push("Подзадачи: " + res.subs.map((s) => s.lang + " — " + linkTo(s.id, s.url)).join(", "));
     if (res.errors.length) out.push("Не создал: " + res.errors.join("; "));
     if (res.unfilled.length) out.push("Остались пустыми: " + res.unfilled.join(", ") + ".");

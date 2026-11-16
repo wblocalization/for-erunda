@@ -284,7 +284,7 @@
         languages: wantSubs ? chosen : [], withEditing: subs.value === "lang+edit",
         postId: react.checked ? thread.rootId : null
       } }).then(function (res) {
-        return announce(thread, res, reply.checked, react.checked).then(function (warn) { done(m, res, warn); });
+        return announce(thread, res, reply.checked, react.checked, st.settings.replyText).then(function (warn) { done(m, res, warn); });
       }).catch(function (e) {
         go.disabled = false;
         go.textContent = goLabel();
@@ -296,10 +296,12 @@
   }
 
   // Ссылка и реакция в треде. Задача уже создана, так что ошибка Band здесь — предупреждение, а не провал.
-  function announce(thread, res, reply, react) {
+  function announce(thread, res, reply, react, replyText) {
     var jobs = [];
     if (reply) {
-      var text = res.comment ? "Добавлено в тикет Tracker: [" + res.id + "](" + res.url + ")" : "Задача в Tracker: [" + res.id + "](" + res.url + ")";
+      // Текст задаётся в настройках; {link} заменяется ссылкой на тикет. Без {link} ссылка дописывается в конец.
+      var link = "[" + res.id + "](" + res.url + ")", tpl = (replyText || "").trim() || "Тикет в трекере: {link}";
+      var text = tpl.indexOf("{link}") >= 0 ? tpl.split("{link}").join(link) : tpl + " " + link;
       if (res.subs.length) text += "\nПодзадачи: " + res.subs.map(function (s) { return s.lang + " — [" + s.id + "](" + s.url + ")"; }).join(", ");
       jobs.push(api("/posts", "POST", { channel_id: thread.channelId, root_id: thread.rootId, message: text }));
     }

@@ -41,6 +41,7 @@
     $("remindAll").checked = st.settings.remindAll;
     $("urlTemplate").value = st.settings.urlTemplate;
     $("hiddenFields").value = (st.settings.hiddenFields || []).join(", ");
+    $("replyText").value = st.settings.replyText;
   }
 
   $("connectForm").addEventListener("submit", function (e) {
@@ -77,6 +78,7 @@
     send("saveSettings", {
       me: meId ? { id: meId } : null,
       settings: { scope: scope, hoursBefore: hours, deadlineTime: $("deadlineTime").value || "18:00", remindAll: $("remindAll").checked, urlTemplate: url,
+        replyText: $("replyText").value.trim() || "Привет! Задача в работе. Тикет в трекере: {link}",
         hiddenFields: $("hiddenFields").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) }
     }).then(function (st) {
       render(st);
