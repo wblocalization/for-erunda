@@ -5,6 +5,7 @@
   "use strict";
   var B = root.LocBrief;
   var BASE = "https://tracker.wb.ru";
+  var FIELDS_VERSION = 2; // меняется, когда форма начинает понимать новые виды полей
   var PAGE = 100, MAX_PAGES = 10, GAP_MS = 250; // лимит API — 5 запросов в секунду
 
   var DEFAULT_SETTINGS = {
@@ -12,6 +13,7 @@
     hoursBefore: [24, 3],    // за сколько часов до дедлайна напоминать
     remindAll: false,        // напоминать по всем показанным задачам, а не только по отмеченным
     deadlineTime: "18:00",   // время дедлайна, когда в брифе только дата
+    hiddenFields: ["Reviewer", "Формат"], // поля Tracker, которые не показываем в форме
     urlTemplate: BASE + "/issue/{code}"
   };
 
@@ -99,8 +101,8 @@
       return index;
     }
 
-    // Поля типа задачи в коротком виде для формы: только выпадающие списки и даты.
-    // Поля с людьми (Reviewer) и числа (SP) заполняет исполнитель по ходу работы, в форму их не берём.
+    // Поля типа задачи в коротком виде для формы: выпадающие списки, числа и даты.
+    // Поля с людьми (Reviewer) в форму не берём.
     function formFields(list) {
       var out = [];
       (list || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).forEach(function (f) {
@@ -114,6 +116,8 @@
             required: !!(body.required || (meta.restrictions || {}).required),
             options: (body.variants || []).map(pick), defaults: (body.defaultValues || []).map(pick)
           });
+        } else if (f.typeCode === "int64") {
+          out.push({ id: snap.id, title: snap.title, type: "number", hint: body.hintText || "" });
         } else if (f.typeCode === "datetime") {
           out.push({ id: snap.id, title: snap.title, type: "datetime" });
         }
@@ -199,9 +203,9 @@
 
     // ---------- Список задач ----------
     async function sync() {
-      var s = await store.get(["auth", "ns", "project", "fieldIndex", "deadlineIds", "types", "settings", "me", "people", "typeFields"]);
+      var s = await store.get(["auth", "ns", "project", "fieldIndex", "deadlineIds", "types", "settings", "me", "people", "typeFields", "fieldsVersion"]);
       if (!s.auth) return null;
-      var typeFields = s.typeFields || {};
+      var typeFields = s.fieldsVersion === FIELDS_VERSION ? (s.typeFields || {}) : {};
       var settings = Object.assign({}, DEFAULT_SETTINGS, s.settings), index = s.fieldIndex || {};
       var query = { namespace_code: s.ns.code, project_code: s.project.code, limit: PAGE, sort: "updated_at", order: "DESC" };
       if (s.me && settings.scope === "executor") query.executor_id = s.me.id;
@@ -245,7 +249,7 @@
       sync.refreshFields = false;
       var sortByName = function (a, b) { return a.name.localeCompare(b.name, "ru"); };
       await store.set({
-        issues: issues, total: total, lastSync: now(), lastError: "", fieldIndex: index, typeFields: typeFields,
+        issues: issues, total: total, lastSync: now(), lastError: "", fieldIndex: index, typeFields: typeFields, fieldsVersion: FIELDS_VERSION,
         types: Object.keys(types).map(function (k) { return types[k]; }).sort(sortByName),
         people: Object.keys(people).map(function (k) { return people[k]; }).sort(sortByName)
       });
@@ -303,11 +307,13 @@
 
     // Что в созданной задаче осталось пустым — показываем менеджеру, ничего не додумывая.
     function unfilled(input, s, typeAlias) {
-      var out = [];
+      var out = [], settings = Object.assign({}, DEFAULT_SETTINGS, s.settings);
+      var hidden = (settings.hiddenFields || []).map(function (h) { return h.trim().toLowerCase(); });
       if (!input.executorId) out.push("Исполнитель");
       if (!input.deadline) out.push("Дедлайн");
       ((s.typeFields || {})[typeAlias] || []).forEach(function (d) {
-        if (d.type === "choice" && !d.required && !((input.choices || {})[d.id] || []).length) out.push(d.title);
+        var optional = (d.type === "choice" && !d.required) || d.type === "number";
+        if (optional && hidden.indexOf(d.title.trim().toLowerCase()) < 0 && !((input.choices || {})[d.id] || []).length) out.push(d.title);
       });
       return out;
     }
@@ -317,6 +323,8 @@
       var defs = (s.typeFields || {})[typeAlias] || [], out = Object.assign({}, choices);
       var own = B.suggest({ languages: [lang], product: "" }, "", defs.filter(function (d) { return /стран/i.test(d.title); }));
       Object.keys(own).forEach(function (id) { out[id] = own[id]; });
+      // Числа (SP) — оценка всей задачи, в подзадачи их не переносим.
+      defs.forEach(function (d) { if (d.type === "number") delete out[d.id]; });
       return out;
     }
 

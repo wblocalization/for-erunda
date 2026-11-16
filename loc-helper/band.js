@@ -118,6 +118,15 @@
     m.foot.appendChild(el("button.btn.primary", { text: "Открыть настройки", onclick: function () { U.send("openOptions"); m.close(); } }));
   }
 
+  // Числовое поле Tracker (например, SP). Пустое поле в задачу не отправляется.
+  function numberInput(def, kept) {
+    var input = el("input", { type: "text", inputMode: "numeric", placeholder: def.hint || "число", value: kept && kept.length ? String(kept[0]) : "" });
+    return { el: input, get: function () {
+      var v = input.value.trim().replace(",", ".");
+      return v !== "" && isFinite(v) ? [Math.round(Number(v))] : [];
+    } };
+  }
+
   function today() {
     var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
     return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
@@ -167,11 +176,14 @@
     var extra = el("div.section"), inputs = [], kept = {};
     function drawExtra() {
       inputs.forEach(function (i) { kept[i.def.id] = i.input.get(); });
-      var defs = (st.typeFields[type.value] || []).filter(function (d) { return d.type === "choice"; });
+      var hidden = (st.settings.hiddenFields || []).map(function (h) { return h.trim().toLowerCase(); });
+      var defs = (st.typeFields[type.value] || []).filter(function (d) {
+        return (d.type === "choice" || d.type === "number") && hidden.indexOf(d.title.trim().toLowerCase()) < 0;
+      });
       var hints = B.suggest(parsed, picked.post.message, defs);
       extra.textContent = "";
       inputs = defs.map(function (d) {
-        var input = U.choiceInput(d, kept[d.id] || hints[d.id] || []);
+        var input = d.type === "number" ? numberInput(d, kept[d.id]) : U.choiceInput(d, kept[d.id] || hints[d.id] || []);
         var guessed = !kept[d.id] && hints[d.id] && !d.required;
         extra.appendChild(U.field(d.title + (guessed ? " (подставлено по брифу, проверьте)" : ""), input.el));
         return { def: d, input: input };

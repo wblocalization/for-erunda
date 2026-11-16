@@ -40,6 +40,7 @@
     $("deadlineTime").value = st.settings.deadlineTime;
     $("remindAll").checked = st.settings.remindAll;
     $("urlTemplate").value = st.settings.urlTemplate;
+    $("hiddenFields").value = (st.settings.hiddenFields || []).join(", ");
   }
 
   $("connectForm").addEventListener("submit", function (e) {
@@ -75,7 +76,8 @@
     b.disabled = true;
     send("saveSettings", {
       me: meId ? { id: meId } : null,
-      settings: { scope: scope, hoursBefore: hours, deadlineTime: $("deadlineTime").value || "18:00", remindAll: $("remindAll").checked, urlTemplate: url }
+      settings: { scope: scope, hoursBefore: hours, deadlineTime: $("deadlineTime").value || "18:00", remindAll: $("remindAll").checked, urlTemplate: url,
+        hiddenFields: $("hiddenFields").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean) }
     }).then(function (st) {
       render(st);
       $("saved").textContent = st.lastError ? "" : "Сохранено.";

@@ -140,7 +140,8 @@ function createBot(deps) {
     const st = await core.status();
     const picked = pickBrief(thread), parsed = picked.parsed;
     const type = findType(st, cfg.defaultType) || st.types[0];
-    const defs = (st.typeFields[type.alias] || []).filter((d) => d.type === "choice");
+    const hidden = (st.settings.hiddenFields || []).map((h) => h.trim().toLowerCase());
+    const defs = (st.typeFields[type.alias] || []).filter((d) => d.type === "choice" && hidden.indexOf(d.title.trim().toLowerCase()) < 0);
     const choices = B.suggest(parsed, picked.post.message, defs);
     const person = trackerPerson(st, author);
     const draft = {
