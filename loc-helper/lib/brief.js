@@ -25,8 +25,29 @@
     ["visual", /^(?:визуал|скрин(?:ы|шоты?)?|макеты?|visual)$/],
     ["text", /^(?:тексты?|исходник|text)$/],
     ["responsible", /^ответственны[йе](?:\s+за\s+перевод)?$/],
-    ["weblate", /^(?:веблейт|weblate)$/]
+    ["weblate", /^(?:веблейт|weblate)$/],
+    ["task", /^(?:задача|что\s+нужно|запрос)$/],
+    ["customer", /^(?:бизнес[-\s]?заказчик|заказчик)$/]
   ];
+
+  // Названия полей, по которым бриф в одну строку можно разрезать на строки.
+  var KEY_WORDS = "ответственны[йе](?:\\s+за\\s+перевод)?|сроки?|дедлайн|языки?(?:\\s+перевода)?|продукт|проект|контекст|визуал|тексты?|" +
+    "исходник|веблейт|weblate|задача|бизнес[-\\s]?заказчик|заказчик";
+
+  // Заказчики часто пишут бриф одним абзацем: «**Сроки:** до 20.11 **Языки:** английский **Текст:** …».
+  // Снимаем жирный шрифт с названий полей и ставим каждое поле на свою строку.
+  function normalize(text) {
+    var t = String(text || "").replace(/\r/g, "");
+    t = t.replace(new RegExp("\\*\\*\\s*(" + KEY_WORDS + ")\\s*(?::\\s*\\*\\*|\\*\\*\\s*:)", "gi"), "\n$1:");
+    // Без жирного шрифта режем только перед названием с заглавной буквы, чтобы не разорвать обычную фразу.
+    // После «Текст:» идёт исходник для перевода: там ничего не трогаем.
+    var cut = t.search(/(?:^|\n|\s)(?:тексты?|исходник)\s*:/i), head = cut < 0 ? t : t.slice(0, cut), tail = cut < 0 ? "" : t.slice(cut);
+    head = head.replace(new RegExp("([^\\n])[ \\t]+((?:" + KEY_WORDS + ")\\s*:)", "gi"), function (all, before, key) {
+      return /^[A-ZА-ЯЁ]/.test(key) ? before + "\n" + key : all;
+    });
+    t = head + tail.replace(/^[ \t]+(?=[A-ZА-ЯЁ])/, "\n");
+    return t.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "");
+  }
 
   var REQUIRED = [["languages", "языки"], ["deadline", "сроки"], ["product", "продукт"], ["context", "контекст"], ["text", "текст"]];
 
@@ -65,6 +86,15 @@
     var v = value.toLowerCase(), d, m, y, x;
     if ((x = v.match(/(\d{1,2})[.\/](\d{1,2})(?:[.\/](\d{2,4}))?/))) {
       d = +x[1]; m = +x[2]; y = x[3] ? +x[3] : null;
+    } else if ((x = v.match(/(\d+)(?:\s*[-–—]\s*(\d+))?\s*(рабоч[а-яё]*\s+)?(?:дн[а-яё]*|день|сут[а-яё]*)/))) {
+      // «1-2 рабочих дня», «3 дня»: считаем от сегодня, берём больший срок.
+      var left = +(x[2] || x[1]), day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (left > 60) return null;
+      while (left > 0) {
+        day.setDate(day.getDate() + 1);
+        if (!x[3] || (day.getDay() !== 0 && day.getDay() !== 6)) left--;
+      }
+      return iso(day);
     } else if ((x = v.match(/(\d{1,2})\s+([а-яё]+)(?:\s+(\d{4}))?/))) {
       d = +x[1]; y = x[3] ? +x[3] : null;
       for (var i = 0; i < MONTHS.length; i++) if (x[2].indexOf(MONTHS[i]) === 0 && (i !== 4 || /^ма[йя]/.test(x[2]))) m = i + 1;
@@ -112,10 +142,12 @@
   }
 
   // Срок в свободном тексте: сначала дата после «до / к / срок / дедлайн / не позднее», потом любая дата.
+  var REL = "\\d+(?:\\s*[-–—]\\s*\\d+)?\\s*(?:рабоч[а-яё]*\\s+)?(?:дн[а-яё]*|день)";
   var DATE = "(?:\\d{1,2}[./]\\d{1,2}(?:[./]\\d{2,4})?|\\d{1,2}\\s+(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)[а-яё]*(?:\\s+\\d{4})?|сегодня|завтра)";
   function deadlineAnywhere(text, now) {
     var clean = String(text).replace(/https?:\/\/\S+/g, " ");
     var m = clean.match(new RegExp("(?:^|[^а-яё])((?:до|к|ко|срок[а-яё]*|дедлайн[а-яё]*|ддл|не\\s+позднее|крайний\\s+срок)[\\s:—-]*" + DATE + ")", "i")) ||
+      clean.match(new RegExp("(?:^|[^а-яё])((?:срок[а-яё]*|дедлайн[а-яё]*|в\\s+течение|за)[\\s:—-]*" + REL + ")", "i")) ||
       clean.match(new RegExp("(?:^|[^\\d.])(" + DATE.replace("|сегодня|завтра", "") + ")", "i"));
     if (!m) return null;
     var date = parseDate(m[1], now);
@@ -162,12 +194,24 @@
     return text.slice(0, max + 1).replace(/\s+\S*$/, "").replace(/[,;:—-]+$/, "") + "…";
   }
 
+  // «Прошу помочь с переводом акции «X»» → «Перевод акции «X»». Не получилось — пустая строка.
+  var ASK = /^(?:(?:очень\s+)?(?:прошу|просим|просьба|помогите|нужн[оаы]?|нужен|нужна\s+помощь|требу[ею]тся|необходим[оаы]?|хотим|хотели\s+бы|надо|можете(?:\s+ли)?|можно(?:\s+ли)?|у\s+нас|есть|тут|здесь|ещё|еще|снова|опять|пожалуйста|срочно|вас|нам|мне|помочь|сделать|запросить|заказать|взять\s+в\s+работу)[\s,:—-]+)+/i;
+  function titleFrom(sentence) {
+    var t = sentence.replace(/[*_`]/g, "").replace(/\s+([.,!?])/g, "$1").replace(/[.!?…\s]+$/, "").trim(), prev;
+    do { prev = t; t = t.replace(ASK, "").replace(/^(?:с|со|на|по|о|об)\s+(?=перев)/i, ""); } while (t !== prev);
+    var noun = t.match(/^перевод(?:ом|а|у|е|ы|ов|ами)?(?:\s+|$)(.*)$/i);
+    if (noun) return noun[1] ? "Перевод " + noun[1] : "";
+    var verb = t.match(/^(?:перевести|переводим|локализовать|локализация|локализацию)\s+(.+)$/i);
+    return verb ? "Перевод: " + verb[1] : "";
+  }
+
   function parseBrief(text, now) {
-    var lines = String(text || "").replace(/\r/g, "").split("\n");
+    text = normalize(text);
+    var lines = text.split("\n");
     var fields = {}, current = null, intro = [];
     lines.forEach(function (line) {
       var m = stripBullet(line).match(/^([^:\n]{2,40}?)\s*:\s*(.*)$/);
-      var key = m && !/^https?$/i.test(m[1]) ? keyOf(m[1]) : null;
+      var key = m && current !== "text" && !/^https?$/i.test(m[1]) ? keyOf(m[1]) : null;
       if (key) {
         current = key;
         fields[key] = m[2].trim();
@@ -188,7 +232,10 @@
     }
     var product = (fields.product || "").split("\n")[0].trim();
     var gist = cleanText(intro.join("\n")).split("\n").filter(Boolean)[0] || "";
-    var have = { languages: langs.length, deadline: deadline, product: product, context: fields.context, text: fields.text || fields.weblate };
+    var task = (fields.task || "").split("\n")[0].trim(), customer = (fields.customer || "").split("\n")[0].trim();
+    var asked = titleFrom(gist.split(/[.!?…](?:\s|$)/)[0]);
+    var title = asked || (product ? "Перевод: " + product : task ? "Перевод: " + task.replace(/^это\s+/i, "").replace(/^перевод\s+/i, "") : gist.split(/[.!?…](?:\s|$)/)[0]);
+    var have = { languages: langs.length, deadline: deadline, product: product || customer, context: fields.context || task, text: fields.text || fields.weblate };
     return {
       found: Object.keys(fields).length,
       fields: fields,
@@ -197,7 +244,8 @@
       deadlineRaw: deadlineRaw,
       product: product,
       links: links(text),
-      title: product ? "Перевод: " + product : shorten(gist.split(/[.!?…](?:\s|$)/)[0], 70),
+      customer: customer,
+      title: shorten(title.replace(/\s+([.,!?])/g, "$1").replace(/[.!?…\s]+$/, ""), 90),
       missing: REQUIRED.filter(function (r) { return !have[r[0]]; }).map(function (r) { return r[1]; })
     };
   }
@@ -205,7 +253,7 @@
   // Текст для описания задачи. Бриф по шаблону оставляем как есть, только без приветствий.
   // Свободный текст начинаем с выжимки: языки, срок, ссылки — и ниже слова заказчика.
   function digest(text, parsed) {
-    var clean = cleanText(text);
+    var clean = cleanText(normalize(text));
     if (parsed.found >= 3) return clean;
     var head = [];
     if (parsed.languages.length) head.push("Языки: " + parsed.languages.map(function (l) { return l.name; }).join(", "));
@@ -239,8 +287,8 @@
         parsed.languages.forEach(function (l) { var o = COUNTRY[l.code] && find(COUNTRY[l.code]); if (o && picked.indexOf(o) < 0) picked.push(o); });
       } else if (/формат/i.test(d.title)) {
         FORMAT.forEach(function (f) { var o = f[1].test(low) && find(f[0]); if (o) picked.push(o); });
-      } else if (/заказчик/i.test(d.title) && parsed.product) {
-        var exact = find(parsed.product);
+      } else if (/заказчик/i.test(d.title) && (parsed.product || parsed.customer)) {
+        var exact = (parsed.customer && find(parsed.customer)) || find(parsed.product);
         if (exact) picked.push(exact);
       }
       if (!picked.length && d.required) picked = d.defaults.slice(0, 1);

@@ -132,6 +132,42 @@
       return [u.lastName, u.firstName].filter(Boolean).join(" ") || u.login || "";
     }
 
+    // Задачу именно выполнили, а не отменили: на бриф в Band ставится ✅.
+    function finished(issue) {
+      var cat = issue.state && issue.state.category && issue.state.category.code || "";
+      return isClosed(issue) && !/cancel|reject|declin/i.test(cat + " " + (issue.state && issue.state.name || "")) &&
+        !/отмен|отклон/i.test(issue.state && issue.state.name || "");
+    }
+
+    // Задачи, созданные из тредов Band, помним в links. Когда такую задачу закрывают,
+    // она попадает в очередь done: страница Band или бот поставит ✅ и уберёт её оттуда.
+    async function markDone(seen) {
+      var s = await store.get(["links", "done"]), links = s.links || {}, done = s.done || [], changed = false;
+      var ids = Object.keys(links);
+      for (var i = 0; i < ids.length; i++) {
+        var id = ids[i], state = seen[id];
+        if (state === undefined) {
+          // Задача не попала в список (чужая или давно не менялась) — спрашиваем о ней отдельно.
+          try {
+            var it = await api("GET", "/public-api/v1/issue/" + encodeURIComponent(id));
+            state = finished(it.issue || it);
+          } catch (e) {
+            if (e.status === 404) { delete links[id]; changed = true; }
+            continue;
+          }
+        }
+        if (state) { done.push({ id: id, postId: links[id].postId }); delete links[id]; changed = true; }
+      }
+      if (changed) await store.set({ links: links, done: done });
+    }
+
+    async function doneQueue() { return (await store.get(["done"])).done || []; }
+    async function doneAck(id) {
+      var done = ((await store.get(["done"])).done || []).filter(function (d) { return d.id !== id; });
+      await store.set({ done: done });
+      return done;
+    }
+
     function isClosed(issue) {
       var cat = issue.state && issue.state.category && issue.state.category.code || "";
       var closedAt = issue.closedAt && !/^0001/.test(issue.closedAt) ? issue.closedAt : null;
@@ -211,7 +247,7 @@
       if (s.me && settings.scope === "executor") query.executor_id = s.me.id;
       if (s.me && settings.scope === "creator") query.creator_id = s.me.id;
 
-      var types = {}, people = {}, issues = [], total = null;
+      var types = {}, people = {}, issues = [], total = null, seen = {};
       (s.types || []).forEach(function (t) { types[t.id] = t; });
       (s.people || []).forEach(function (p) { people[p.id] = p; });
       try {
@@ -228,6 +264,7 @@
             [it.executor, it.creator].forEach(function (u) { if (u && u.id) people[u.id] = { id: u.id, name: personName(u), login: u.login || "" }; });
             var b = brief(it, index, s.deadlineIds || []);
             if (!b.closed) issues.push(b);
+            seen[it.id] = finished(it);
           });
           if (list.length < PAGE || (total !== null && query.offset + PAGE >= total)) break;
         }
@@ -247,6 +284,7 @@
         } catch (e) { /* форма покажет только общие поля */ }
       }
       sync.refreshFields = false;
+      await markDone(seen);
       var sortByName = function (a, b) { return a.name.localeCompare(b.name, "ru"); };
       await store.set({
         issues: issues, total: total, lastSync: now(), lastError: "", fieldIndex: index, typeFields: typeFields, fieldsVersion: FIELDS_VERSION,
@@ -364,6 +402,11 @@
             errors.push(lang.name + stages[j].suffix + ": " + e.message);
           }
         }
+      }
+      if (input.postId) {
+        var ls = await store.get(["links"]), links = ls.links || {};
+        links[parent.id] = { postId: input.postId, at: now() };
+        await store.set({ links: links });
       }
       sync().catch(function () {});
       return {
@@ -489,6 +532,7 @@
     return {
       connect: connect, sync: sync, status: status, createFromBrief: createFromBrief,
       refresh: function () { sync.refreshFields = true; return sync(); },
+      doneQueue: doneQueue, doneAck: doneAck,
       cloneForLanguages: cloneForLanguages, diagnose: diagnose, dueReminders: dueReminders, hotCount: hotCount, issueUrl: issueUrl
     };
   }

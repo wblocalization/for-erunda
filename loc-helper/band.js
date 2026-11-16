@@ -242,7 +242,7 @@
     m.body.appendChild(U.field("Описание", desc));
     m.body.appendChild(el("label.check", {}, [whole, "Добавить в описание всю переписку из треда"]));
     m.body.appendChild(el("label.check", {}, [reply, "Написать в тред ссылку на задачу"]));
-    m.body.appendChild(el("label.check", {}, [react, "Поставить ✅ на бриф"]));
+    m.body.appendChild(el("label.check", {}, [react, "Поставить 👀 на бриф, а когда задачу закроют — ✅"]));
     m.body.appendChild(error);
 
     var go = el("button.btn.primary");
@@ -281,7 +281,8 @@
         mode: mode.value, targetCode: code, name: name.value.trim(), description: desc.value,
         typeAlias: type.value, subTypeAlias: subType.value, executorId: executor.value || null,
         deadline: date.value || null, start: start.value || null, end: end.value || null, choices: choices,
-        languages: wantSubs ? chosen : [], withEditing: subs.value === "lang+edit"
+        languages: wantSubs ? chosen : [], withEditing: subs.value === "lang+edit",
+        postId: react.checked ? thread.rootId : null
       } }).then(function (res) {
         return announce(thread, res, reply.checked, react.checked).then(function (warn) { done(m, res, warn); });
       }).catch(function (e) {
@@ -303,7 +304,7 @@
       jobs.push(api("/posts", "POST", { channel_id: thread.channelId, root_id: thread.rootId, message: text }));
     }
     if (react) {
-      jobs.push(api("/reactions", "POST", { user_id: thread.me.id, post_id: thread.rootId, emoji_name: "white_check_mark", create_at: 0 }));
+      jobs.push(api("/reactions", "POST", { user_id: thread.me.id, post_id: thread.rootId, emoji_name: "eyes", create_at: 0 }));
     }
     return Promise.all(jobs.map(function (j) { return j.then(function () { return null; }, function (e) { return e.message; }); }))
       .then(function (r) { return r.filter(Boolean).join("; "); });
@@ -321,6 +322,28 @@
     if (warn) m.body.appendChild(el("div.note.warn", { text: "В Tracker всё создано, но в тред написать не получилось: " + warn }));
     m.foot.appendChild(el("button.btn.primary", { text: "Готово", onclick: m.close }));
   }
+
+  // ---------- ✅, когда задачу закрыли ----------
+  // Фоновый скрипт замечает, что задачу из треда закрыли в Tracker, и кладёт её в очередь.
+  // Реакцию ставим отсюда, со страницы Band: только здесь есть вход в Band.
+  function settleDone() {
+    U.send("doneQueue").then(function (queue) {
+      if (!queue.length) return null;
+      return api("/users/me").then(function (me) {
+        return queue.reduce(function (chain, item) {
+          return chain.then(function () {
+            return api("/users/" + me.id + "/posts/" + item.postId + "/reactions/eyes", "DELETE").catch(function () { /* 👀 могли снять руками */ })
+              .then(function () { return api("/reactions", "POST", { user_id: me.id, post_id: item.postId, emoji_name: "white_check_mark", create_at: 0 }); })
+              .then(function () { return U.send("doneAck", { id: item.id }); },
+                // Сообщение удалили или нет доступа — больше не пытаемся.
+                function (e) { return /HTTP 40[34]/.test(e.message) ? U.send("doneAck", { id: item.id }) : null; });
+          });
+        }, Promise.resolve());
+      });
+    }).catch(function () { /* расширение перезагрузили — попробуем в следующий раз */ });
+  }
+  setTimeout(settleDone, 5000);
+  setInterval(settleDone, 2 * 60 * 1000);
 
   // ---------- Кнопка у сообщения ----------
   var chip = null, hideTimer = null, currentPost = null;

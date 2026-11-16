@@ -70,6 +70,8 @@ const handlers = {
     return core.status();
   },
   // Страница Tracker подсказала, как выглядит ссылка на задачу.
+  doneQueue: () => core.doneQueue(),
+  doneAck: (m) => core.doneAck(m.id),
   learnUrl: async (m) => {
     if (!/^https:\/\/tracker\.wb\.ru\/.*\{code\}/.test(m.template)) return false;
     const s = await store.get(["settings"]);

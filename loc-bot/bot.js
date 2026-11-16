@@ -57,7 +57,8 @@ function bandClient(cfg, fetchFn) {
     channel: (id) => api("/channels/" + id),
     direct: (a, b) => api("/channels/direct", "POST", [a, b]),
     say: (channelId, rootId, message) => api("/posts", "POST", { channel_id: channelId, root_id: rootId || "", message, props: { [MARK]: true } }),
-    react: (userId, postId, emoji) => api("/reactions", "POST", { user_id: userId, post_id: postId, emoji_name: emoji, create_at: 0 })
+    react: (userId, postId, emoji) => api("/reactions", "POST", { user_id: userId, post_id: postId, emoji_name: emoji, create_at: 0 }),
+    unreact: (userId, postId, emoji) => api("/users/" + userId + "/posts/" + postId + "/reactions/" + emoji, "DELETE")
   };
 }
 
@@ -207,11 +208,12 @@ function createBot(deps) {
     if (wantSubs && !draft.languages.length) return "В брифе нет языков, подзадачи создать не из чего.";
 
     const res = await core.createFromBrief(Object.assign(draft, {
+      postId: cmd === "комментарий" ? null : thread.rootId,
       mode: cmd === "комментарий" ? "comment" : code ? "sub" : "new", targetCode: code || "",
       languages: wantSubs ? draft.languages : [], withEditing: wantSubs && /редактур/i.test(rest)
     }));
     pending.delete(thread.rootId);
-    band.react(me.id, thread.rootId, "white_check_mark").catch(() => {});
+    band.react(me.id, thread.rootId, "eyes").catch(() => {});
     if (res.comment) return "Добавил бриф комментарием в " + linkTo(res.id, res.url) + ".";
     const out = [(res.parent ? "Создал подзадачу " : "Создал задачу ") + linkTo(res.id, res.url) + (res.parent ? " в тикете " + res.parent : "") + "."];
     if (res.subs.length) out.push("Подзадачи: " + res.subs.map((s) => s.lang + " — " + linkTo(s.id, s.url)).join(", "));
@@ -300,7 +302,22 @@ function createBot(deps) {
     return sent;
   }
 
-  return { start, onEvent, remind, pending };
+  // Задачу из треда закрыли в Tracker — меняем 👀 на ✅ на брифе.
+  async function settleDone() {
+    const queue = await core.doneQueue();
+    for (const item of queue) {
+      try {
+        await band.unreact(me.id, item.postId, "eyes").catch(() => {});
+        await band.react(me.id, item.postId, "white_check_mark");
+        await core.doneAck(item.id);
+      } catch (e) {
+        if (/HTTP 40[34]/.test(e.message)) await core.doneAck(item.id); else log("Не поставил ✅ по " + item.id + ": " + e.message);
+      }
+    }
+    return queue.length;
+  }
+
+  return { start, onEvent, remind, settleDone, pending };
 }
 
 // ---------- Запуск ----------
@@ -350,7 +367,7 @@ async function main() {
   connectSocket(cfg, bot.onEvent, log);
   // Раз в 10 минут обновляем задачи из Tracker (типы, люди, дедлайны) и рассылаем напоминания.
   setInterval(async () => {
-    try { await core.sync(); const n = await bot.remind(); if (n) log("Напоминаний отправлено: " + n); } catch (e) { log("Tracker: " + e.message); }
+    try { await core.sync(); await bot.settleDone(); const n = await bot.remind(); if (n) log("Напоминаний отправлено: " + n); } catch (e) { log("Tracker: " + e.message); }
   }, 10 * 60 * 1000);
 }
 
