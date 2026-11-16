@@ -172,7 +172,10 @@
     function isClosed(issue) {
       var cat = issue.state && issue.state.category && issue.state.category.code || "";
       var closedAt = issue.closedAt && !/^0001/.test(issue.closedAt) ? issue.closedAt : null;
-      return issue.isActive === false || !!closedAt || /done|close|complete|cancel|reject|resolved/i.test(cat);
+      // Код категории статуса в документации не описан, поэтому смотрим и на него, и на название статуса.
+      var name = issue.state && issue.state.name || "";
+      return issue.isActive === false || !!closedAt || /done|close|complete|finish|cancel|reject|resolved/i.test(cat) ||
+        /заверш|выполнен|готов|закрыт|отмен|отклон/i.test(name);
     }
 
     // Короткая карточка задачи для списка и напоминаний.
@@ -468,6 +471,17 @@
           keys: Object.keys(it)
         };
       } catch (e) { out.errors.push("sample: " + e.message); }
+      // Задачи, созданные из тредов Band, и что Tracker говорит об их статусе: по этому видно, почему не поставилась ✅.
+      var l = await store.get(["links", "done", "lastSync", "lastError"]);
+      out.done = l.done || []; out.lastSync = l.lastSync || 0; out.lastError = l.lastError || ""; out.linked = [];
+      var linkIds = Object.keys(l.links || {});
+      for (var k = 0; k < linkIds.length; k++) {
+        try {
+          var li = await api("GET", "/public-api/v1/issue/" + encodeURIComponent(linkIds[k]));
+          li = li.issue || li;
+          out.linked.push({ id: li.id, postId: l.links[linkIds[k]].postId, state: li.state, closedAt: li.closedAt, isActive: li.isActive, closed: isClosed(li), finished: finished(li) });
+        } catch (e) { out.linked.push({ id: linkIds[k], error: e.message }); }
+      }
       for (var i = 0; i < (s.types || []).length; i++) {
         var t = s.types[i];
         try {
