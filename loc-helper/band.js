@@ -345,7 +345,9 @@
     }).catch(function () { /* расширение перезагрузили — попробуем в следующий раз */ });
   }
   setTimeout(settleDone, 5000);
-  setInterval(settleDone, 2 * 60 * 1000);
+  setInterval(settleDone, 60 * 1000);
+  // Вернулись на вкладку Band (например, из Tracker, где только что закрыли задачу) — проверяем сразу.
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) settleDone(); });
 
   // ---------- Кнопка у сообщения ----------
   var chip = null, hideTimer = null, currentPost = null;

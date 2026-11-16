@@ -70,7 +70,8 @@ const handlers = {
     return core.status();
   },
   // Страница Tracker подсказала, как выглядит ссылка на задачу.
-  doneQueue: () => core.doneQueue(),
+  // Вкладка Band спрашивает раз в минуту: заодно проверяем, не закрыли ли задачи из тредов.
+  doneQueue: async () => { await core.checkLinks().catch(() => {}); return core.doneQueue(); },
   doneAck: (m) => core.doneAck(m.id),
   learnUrl: async (m) => {
     if (!/^https:\/\/tracker\.wb\.ru\/.*\{code\}/.test(m.template)) return false;

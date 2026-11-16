@@ -21,7 +21,7 @@
   function create(deps) {
     var fetchFn = deps.fetch, store = deps.store, now = deps.now || Date.now, base = deps.base || BASE;
     var sleep = deps.sleep || function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
-    var lastCall = 0;
+    var lastCall = 0, lastLinksCheck = 0;
 
     // В спецификации указана Basic-авторизация, но формат личного токена не описан,
     // поэтому при подключении перебираем варианты и запоминаем тот, что подошёл.
@@ -147,6 +147,8 @@
       var ids = Object.keys(links);
       for (var i = 0; i < ids.length; i++) {
         var id = ids[i], state = seen[id];
+        // Связь старше двух месяцев забываем: за это время тикет либо закрыли, либо о нём забыли.
+        if (now() - (links[id].at || 0) > 60 * 864e5) { delete links[id]; changed = true; continue; }
         if (state === undefined) {
           // Задача не попала в список (чужая или давно не менялась) — спрашиваем о ней отдельно.
           try {
@@ -548,6 +550,13 @@
       connect: connect, sync: sync, status: status, createFromBrief: createFromBrief,
       refresh: function () { sync.refreshFields = true; return sync(); },
       doneQueue: doneQueue, doneAck: doneAck,
+      // Быстрая проверка только задач из тредов, без перечитывания всего списка.
+      // Не чаще раза в 45 секунд, даже если открыто несколько вкладок Band.
+      checkLinks: function () {
+        if (now() - lastLinksCheck < 45000) return Promise.resolve();
+        lastLinksCheck = now();
+        return markDone({});
+      },
       cloneForLanguages: cloneForLanguages, diagnose: diagnose, dueReminders: dueReminders, hotCount: hotCount, issueUrl: issueUrl
     };
   }
