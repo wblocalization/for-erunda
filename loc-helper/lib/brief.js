@@ -245,6 +245,8 @@
       product: product,
       links: links(text),
       customer: customer,
+      // Вводная фраза, из которой получилось название: в описании она уже не нужна.
+      titleLine: asked && gist.replace(/[.!?…\s]+$/, "") === gist.split(/[.!?…](?:\s|$)/)[0].replace(/[.!?…\s]+$/, "") ? gist : "",
       title: shorten(title.replace(/\s+([.,!?])/g, "$1").replace(/[.!?…\s]+$/, ""), 90),
       missing: REQUIRED.filter(function (r) { return !have[r[0]]; }).map(function (r) { return r[1]; })
     };
@@ -254,7 +256,12 @@
   // Свободный текст начинаем с выжимки: языки, срок, ссылки — и ниже слова заказчика.
   function digest(text, parsed) {
     var clean = cleanText(normalize(text));
-    if (parsed.found >= 3) return clean;
+    if (parsed.found >= 3) {
+      if (!parsed.titleLine) return clean;
+      var lines = clean.split("\n"), at = lines.indexOf(parsed.titleLine);
+      if (at >= 0) lines.splice(at, 1);
+      return lines.join("\n").replace(/^\n+/, "").replace(/\n{3,}/g, "\n\n");
+    }
     var head = [];
     if (parsed.languages.length) head.push("Языки: " + parsed.languages.map(function (l) { return l.name; }).join(", "));
     if (parsed.deadline) head.push("Срок: " + parsed.deadline.split("-").reverse().join(".") + (parsed.deadlineRaw ? " (в сообщении: «" + parsed.deadlineRaw.split("\n")[0] + "»)" : ""));
