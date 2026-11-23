@@ -11,6 +11,29 @@
   <button class="btn small" id="sync" title="Перечитать задачи из Tracker">Обновить</button>
   <button class="btn small" id="settings">Настройки</button>
 </div>
+<details class="result" id="result">
+  <summary>Результат в тикет: дописать эту страницу в описание</summary>
+  <div class="result-body">
+    <label class="f">Тикет
+      <input type="text" id="resTicket" list="resTickets" placeholder="номер или название тикета">
+      <datalist id="resTickets"></datalist>
+    </label>
+    <label class="f">Название ссылки
+      <input type="text" id="resTitle">
+    </label>
+    <label class="f">Ссылка
+      <input type="text" id="resUrl" spellcheck="false">
+    </label>
+    <label class="f">Комментарий (необязательно)
+      <input type="text" id="resNote" placeholder="например: создала страницу с глоссарием">
+    </label>
+    <div class="actions">
+      <button class="btn primary small" id="resGo">Дописать в описание</button>
+      <span class="hint" id="resHint"></span>
+    </div>
+    <div class="note" id="resMsg" hidden></div>
+  </div>
+</details>
 <div class="note err" id="error" hidden style="margin:10px 14px"></div>
 <div class="meta" id="meta"></div>
 <div id="list"></div>

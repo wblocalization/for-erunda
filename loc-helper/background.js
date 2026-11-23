@@ -81,6 +81,7 @@ const handlers = {
     return true;
   },
   diagnose: () => core.diagnose(),
+  appendResult: (m) => core.appendResult(m.code, m.block),
   openOptions: () => { chrome.runtime.openOptionsPage(); return true; }
 };
 

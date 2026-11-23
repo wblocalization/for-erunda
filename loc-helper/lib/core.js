@@ -459,6 +459,51 @@
       return { source: src.id, made: made, errors: errors, withoutFields: withoutFields };
     }
 
+    // ---------- Результат в описание задачи ----------
+    // Дописывает блок в конец описания. API редактирования требует прислать задачу заново,
+    // поэтому отправляем обратно всё, что в ней было, а потом проверяем, что ничего не пропало.
+    async function appendResult(code, block) {
+      code = String(code || "").trim().toUpperCase();
+      if (!/^[A-ZА-Я0-9_]+-\d+$/.test(code)) throw fail("Укажите номер тикета, например LOCAL-2210.", 0);
+      var s = await store.get(["fieldIndex", "settings"]), index = s.fieldIndex || {};
+      var settings = Object.assign({}, DEFAULT_SETTINGS, s.settings);
+      var path = "/public-api/v1/issue/" + encodeURIComponent(code);
+      var before = await api("GET", path);
+      before = before.issue || before;
+      var filled = function (it) {
+        return (it.fields || []).filter(function (f) { return f.value != null && !(Array.isArray(f.value) && !f.value.length); });
+      };
+      var real = function (d) { return d && !/^0001/.test(d) ? d : null; };
+      var body = { name: before.name, description: ((before.description || "").replace(/\s+$/, "") + "\n\n" + block).replace(/^\s+/, "") };
+      if (before.executor && before.executor.id) body.executor = before.executor.id;
+      if (real(before.startedAt)) body.startedAt = before.startedAt;
+      if (real(before.completedAt)) body.completedAt = before.completedAt;
+      var all = filled(before).map(function (f) { return { id: f.id, value: f.value }; });
+      var simple = all.filter(function (f) { return index[f.id] && /^(choice|int64|datetime)$/.test(index[f.id].type); });
+      var tries = [all, simple, null];
+      for (var i = 0; i < tries.length; i++) {
+        var attempt = Object.assign({}, body);
+        if (tries[i] && tries[i].length) attempt.fields = tries[i];
+        try {
+          await api("PUT", path, null, attempt);
+          break;
+        } catch (e) {
+          // Tracker мог не принять обратно какое-то поле в том виде, в каком сам его отдал, — пробуем без него.
+          if (e.status !== 400 || i === tries.length - 1) throw e;
+        }
+      }
+      var after = await api("GET", path);
+      after = after.issue || after;
+      var kept = {}, lost = [];
+      filled(after).forEach(function (f) { kept[f.id] = true; });
+      filled(before).forEach(function (f) { if (!kept[f.id]) lost.push(f.name || (index[f.id] && index[f.id].title) || f.id); });
+      if (before.executor && before.executor.id && !(after.executor && after.executor.id)) lost.push("Исполнитель");
+      if (real(before.startedAt) && !real(after.startedAt)) lost.push("Дата начала");
+      if (real(before.completedAt) && !real(after.completedAt)) lost.push("Дата завершения");
+      var written = (after.description || "").indexOf(block.split("\n")[0]) >= 0;
+      return { id: code, name: before.name, url: issueUrl(settings.urlTemplate, code), lost: lost, written: written };
+    }
+
     // ---------- Диагностика ----------
     // Что Tracker отдаёт про типы задач и их поля. Токена здесь нет; из задачи-образца берём только названия и поля.
     async function diagnose() {
@@ -549,7 +594,7 @@
     return {
       connect: connect, sync: sync, status: status, createFromBrief: createFromBrief,
       refresh: function () { sync.refreshFields = true; return sync(); },
-      doneQueue: doneQueue, doneAck: doneAck,
+      doneQueue: doneQueue, doneAck: doneAck, appendResult: appendResult,
       // Быстрая проверка только задач из тредов, без перечитывания всего списка.
       // Не чаще раза в 45 секунд, даже если открыто несколько вкладок Band.
       checkLinks: function () {
