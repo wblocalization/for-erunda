@@ -15,7 +15,7 @@
     ".loc-due{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;font:600 11px/18px Inter,system-ui,sans-serif;vertical-align:middle;white-space:nowrap}" +
     '.loc-due[data-u="overdue"]{background:#E5484D;color:#fff}.loc-due[data-u="today"]{background:#F5B700;color:#3b2c00}' +
     '.loc-due[data-u="tomorrow"]{background:#FFF1C2;color:#6b4a00}.loc-due[data-u="later"]{background:#ECE9F5;color:#4a4660}' +
-    ".loc-clone{margin-left:10px;border:0;border-radius:999px;padding:3px 11px;font:600 12px/1.5 Inter,system-ui,sans-serif;background:#7a5af8;color:#fff;cursor:pointer;vertical-align:middle}";
+    ".loc-clone{margin-left:10px;border:0;border-radius:999px;padding:3px 11px;font:600 12px/1.5 Onest,Inter,system-ui,sans-serif;background:linear-gradient(100deg,#8B5CF6,#EC4899);color:#fff;cursor:pointer;vertical-align:middle;box-shadow:0 4px 12px rgba(139,92,246,.3)}";
   (document.head || document.documentElement).appendChild(style);
 
   function refresh() {

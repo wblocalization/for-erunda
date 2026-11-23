@@ -4,52 +4,34 @@
   "use strict";
   var B = root.LocBrief;
 
-  var CSS =
-    ":host{all:initial}" +
-    "*{box-sizing:border-box;font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}" +
-    ".veil{position:fixed;inset:0;background:rgba(20,16,40,.45);z-index:2147483646;display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow:auto}" +
-    ".win{background:#fff;color:#1f1b2e;border-radius:14px;width:min(640px,100%);box-shadow:0 20px 60px rgba(20,16,40,.35);font-size:14px;line-height:1.4}" +
-    ".head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #ece9f5}" +
-    ".head h2{margin:0;font-size:17px;font-weight:650}" +
-    ".x{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:#6b6780;padding:4px 8px;border-radius:8px}" +
-    ".x:hover{background:#f3f1fa}" +
-    ".body{padding:16px 20px;display:grid;gap:12px}" +
-    ".foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:14px 20px;border-top:1px solid #ece9f5}" +
-    "label{display:grid;gap:4px;font-weight:600;font-size:12.5px;color:#4a4660}" +
-    "input[type=text],input[type=date],input[type=time],select,textarea{font:inherit;font-weight:400;color:#1f1b2e;border:1px solid #d6d2e6;border-radius:9px;padding:8px 10px;background:#fff;width:100%}" +
-    "textarea{min-height:150px;resize:vertical}" +
-    "input:focus,select:focus,textarea:focus{outline:2px solid #7a5af8;outline-offset:-1px;border-color:#7a5af8}" +
-    ".row{display:grid;grid-template-columns:1fr 1fr;gap:12px}" +
-    ".check{display:flex;align-items:center;gap:8px;font-weight:400;font-size:13.5px;color:#1f1b2e;cursor:pointer}" +
-    ".check input{width:16px;height:16px;accent-color:#7a5af8;margin:0}" +
-    ".chips{display:flex;flex-wrap:wrap;gap:6px}" +
-    "[hidden]{display:none!important}" +
-    ".section{display:grid;gap:12px}" +
-    ".chip{border:1px solid #d6d2e6;background:#fff;border-radius:999px;padding:4px 11px;font:inherit;font-size:13px;cursor:pointer;color:#4a4660}" +
-    ".chip[aria-pressed=true]{background:#7a5af8;border-color:#7a5af8;color:#fff}" +
-    ".chip.add{border-style:dashed}" +
-    ".btn{border:1px solid #d6d2e6;background:#fff;border-radius:9px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer;color:#1f1b2e}" +
-    ".btn.primary{background:#7a5af8;border-color:#7a5af8;color:#fff}" +
-    ".btn:disabled{opacity:.55;cursor:default}" +
-    ".note{border-radius:9px;padding:9px 12px;font-size:13px}" +
-    ".note.warn{background:#fff6e0;color:#6b4a00}" +
-    ".note.err{background:#ffecec;color:#8a1c1c}" +
-    ".note.ok{background:#e9f8ef;color:#12613a}" +
-    ".note a{color:inherit;font-weight:600}" +
-    ".grow{margin-right:auto;font-size:12.5px;color:#6b6780}" +
-    ".toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#1f1b2e;color:#fff;padding:10px 16px;border-radius:10px;font-size:13.5px;z-index:2147483647;box-shadow:0 8px 24px rgba(0,0,0,.3);max-width:80vw}" +
-    ".toast a{color:#c9bbff}" +
-    "@media(max-width:520px){.row{grid-template-columns:1fr}}";
-
+  // Оформление лежит в theme.css (общий файл с окошком и настройками) и подключается внутрь shadow DOM.
+  // Шрифт объявляется в самом документе: @font-face внутри shadow DOM браузер не учитывает.
   var host = null, shadow = null;
   function layer() {
     if (host && host.isConnected) return shadow;
     host = document.createElement("div");
     host.id = "loc-helper-layer";
     shadow = host.attachShadow({ mode: "closed" });
-    var style = document.createElement("style");
-    style.textContent = CSS;
-    shadow.appendChild(style);
+    var base = document.createElement("style");
+    base.textContent = ":host{all:initial}";
+    shadow.appendChild(base);
+    var theme = document.createElement("link");
+    theme.rel = "stylesheet";
+    theme.href = chrome.runtime.getURL("theme.css");
+    // Пока тема не загрузилась, ничего не показываем — иначе форма мелькнёт без оформления.
+    host.style.visibility = "hidden";
+    var reveal = function () { host.style.visibility = ""; };
+    theme.addEventListener("load", reveal);
+    theme.addEventListener("error", reveal);
+    setTimeout(reveal, 1500);
+    shadow.appendChild(theme);
+    if (!document.getElementById("loc-helper-fonts")) {
+      var fonts = document.createElement("link");
+      fonts.id = "loc-helper-fonts";
+      fonts.rel = "stylesheet";
+      fonts.href = chrome.runtime.getURL("fonts.css");
+      (document.head || document.documentElement).appendChild(fonts);
+    }
     document.documentElement.appendChild(host);
     return shadow;
   }

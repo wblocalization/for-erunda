@@ -359,9 +359,7 @@
 
   function showChip(post) {
     if (!chip) {
-      chip = el("button", { type: "button", text: "→ Tracker", title: "Создать задачу в Tracker из этого треда" });
-      chip.style.cssText = "position:fixed;z-index:2147483645;border:0;border-radius:999px;padding:3px 10px;font:600 12px/1.4 Inter,system-ui,sans-serif;" +
-        "background:#7a5af8;color:#fff;cursor:pointer;box-shadow:0 2px 8px rgba(40,20,120,.35)";
+      chip = el("button.hover-chip", { type: "button", text: "→ Tracker", title: "Создать задачу в Tracker из этого треда" });
       chip.addEventListener("mouseenter", function () { clearTimeout(hideTimer); });
       chip.addEventListener("mouseleave", hideSoon);
       chip.addEventListener("click", function () { if (currentPost) openForm(currentPost.id.replace(/^(?:rhsPost|post)_/, "")); });

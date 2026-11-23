@@ -3,40 +3,48 @@
 <head>
 <meta charset="utf-8">
 <title>Loc Helper</title>
-<link rel="stylesheet" href="page.css">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="theme.css">
 </head>
 <body class="popup">
 <div class="top">
-  <h1>Дедлайны</h1>
-  <button class="btn small" id="sync" title="Перечитать задачи из Tracker">Обновить</button>
-  <button class="btn small" id="settings">Настройки</button>
+  <h1><span class="logo" aria-hidden="true"></span>Loc Helper</h1>
+  <button class="icon-btn" id="sync" title="Перечитать задачи из Tracker" aria-label="Обновить задачи">⟳</button>
+  <button class="icon-btn" id="settings" title="Настройки" aria-label="Настройки">⚙</button>
 </div>
-<details class="result" id="result">
-  <summary>Результат в тикет: дописать эту страницу в описание</summary>
-  <div class="result-body">
-    <label class="f">Тикет
-      <input type="text" id="resTicket" list="resTickets" placeholder="номер или название тикета">
-      <datalist id="resTickets"></datalist>
-    </label>
-    <label class="f">Название ссылки
-      <input type="text" id="resTitle">
-    </label>
-    <label class="f">Ссылка
-      <input type="text" id="resUrl" spellcheck="false">
-    </label>
-    <label class="f">Комментарий (необязательно)
-      <input type="text" id="resNote" placeholder="например: создала страницу с глоссарием">
-    </label>
-    <div class="actions">
-      <button class="btn primary small" id="resGo">Дописать в описание</button>
-      <span class="hint" id="resHint"></span>
-    </div>
-    <div class="note" id="resMsg" hidden></div>
-  </div>
-</details>
-<div class="note err" id="error" hidden style="margin:10px 14px"></div>
-<div class="meta" id="meta"></div>
-<div id="list"></div>
+<main>
+  <div class="note err" id="error" hidden></div>
+
+  <section id="actions" hidden class="section" style="gap:10px">
+    <div class="page-now" id="pageNow" hidden><span>Открытая страница</span><b id="pageTitle"></b></div>
+    <button class="btn primary big" id="newTicket">＋ Создать тикет из этой страницы</button>
+    <details class="panel" id="result">
+      <summary>Дописать страницу в существующий тикет</summary>
+      <div class="panel-body">
+        <label class="f">Тикет
+          <input type="text" id="resTicket" list="resTickets" placeholder="номер или название тикета">
+          <datalist id="resTickets"></datalist>
+        </label>
+        <label class="f">Название ссылки
+          <input type="text" id="resTitle">
+        </label>
+        <label class="f">Ссылка
+          <input type="text" id="resUrl" spellcheck="false">
+        </label>
+        <label class="f">Комментарий (необязательно)
+          <input type="text" id="resNote" placeholder="например: создала страницу с глоссарием">
+        </label>
+        <button class="btn" id="resGo">Дописать в описание</button>
+        <div class="note" id="resMsg" hidden></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="section" style="gap:8px">
+    <div class="list-title">Дедлайны <span class="meta" id="meta"></span></div>
+    <div id="list"></div>
+  </section>
+</main>
 <script src="lib/brief.js"></script>
 <script src="popup.js"></script>
 </body>

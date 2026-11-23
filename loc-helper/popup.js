@@ -41,7 +41,7 @@
       .sort(function (a, b) { return a.deadline - b.deadline; });
     var noDeadline = st.issues.filter(function (it) { return !it.deadline && mine(it, st); }).length;
     var when = st.lastSync ? new Date(st.lastSync).toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }) : "—";
-    $("meta").textContent = st.project.name + " · с дедлайном: " + items.length + (noDeadline ? " · без дедлайна: " + noDeadline : "") + " · обновлено в " + when;
+    $("meta").textContent = items.length + (noDeadline ? " · без дедлайна " + noDeadline : "") + " · обновлено в " + when;
     if (!items.length) {
       list.appendChild(node("div", "empty", st.deadlineField ? "Открытых задач с дедлайном нет." : "В задачах не нашлось поля «Дедлайн». Проверьте задачу-образец в настройках."));
       return;
@@ -91,14 +91,16 @@
       var am = st.me && a.executorId === st.me.id ? 0 : 1, bm = st.me && b.executorId === st.me.id ? 0 : 1;
       return am - bm || a.name.localeCompare(b.name, "ru");
     }).forEach(function (it) { list.appendChild(new Option("", it.id + " · " + it.name)); });
-    $("result").hidden = !st.connected;
+    $("actions").hidden = !st.connected;
   }
 
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     var tab = tabs && tabs[0];
-    if (!tab || !/^https?:/.test(tab.url || "")) { $("resHint").textContent = "Откройте вкладку со страницей, которую нужно добавить."; return; }
+    if (!tab || !/^https?:/.test(tab.url || "")) return;
     $("resTitle").value = pageTitle(tab);
     $("resUrl").value = tab.url;
+    $("pageTitle").textContent = pageTitle(tab) || tab.url;
+    $("pageNow").hidden = false;
   });
 
   $("resGo").addEventListener("click", function () {
@@ -119,15 +121,22 @@
       .then(function () { b.disabled = false; b.textContent = "Дописать в описание"; });
   });
 
+  // Форма нового тикета открывается отдельным окном: в окошке расширения ей тесно, и оно закрывается от любого клика мимо.
+  $("newTicket").addEventListener("click", function () {
+    var q = "?title=" + encodeURIComponent($("resTitle").value) + "&url=" + encodeURIComponent($("resUrl").value);
+    chrome.windows.create({ url: chrome.runtime.getURL("create.html") + q, type: "popup", width: 640, height: 860 });
+    window.close();
+  });
+
   function show(e) { $("error").hidden = false; $("error").textContent = e.message; }
   function load() { return send("status").then(render).catch(show); }
 
   $("settings").addEventListener("click", function () { chrome.runtime.openOptionsPage(); });
   $("sync").addEventListener("click", function () {
     var b = $("sync");
-    b.disabled = true; b.textContent = "Обновляю…";
+    b.disabled = true;
     send("sync").then(render).catch(function (e) { return load().then(function () { show(e); }); })
-      .then(function () { b.disabled = false; b.textContent = "Обновить"; });
+      .then(function () { b.disabled = false; });
   });
   load();
 })();
