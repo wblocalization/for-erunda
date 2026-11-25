@@ -1,0 +1,29 @@
+name: Lokal browser (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'work-browser/**'
+      - '.github/workflows/lokal-browser.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: work-browser
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: work-browser/package-lock.json
+      - run: npm ci
+      - run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lokal-windows
+          path: work-browser/dist/*.zip
+          if-no-files-found: error
