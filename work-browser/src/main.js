@@ -1,17 +1,25 @@
 'use strict';
-// «Локаль» — рабочий браузер: вкладки, закреплённые сервисы, вторая панель рядом и свои расширения из папки.
+// «Ягодка» — рабочий браузер: вкладки, закреплённые сервисы, вторая панель рядом и свои расширения из папки.
 const path = require('path');
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, shell, dialog, session, nativeTheme, clipboard, protocol } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, shell, dialog, session, nativeTheme, clipboard, protocol, safeStorage } = require('electron');
 const { JsonFile, DEFAULTS, SEARCH } = require('./store');
 const Extensions = require('./extensions');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'locext', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, corsEnabled: true, stream: true } },
 ]);
-app.setName('Lokal');
+app.setName('Yagodka');
+// Браузер раньше назывался «Локаль»: при первом запуске под новым именем переносим его профиль (вкладки, входы на сайты, настройки).
+try {
+  const fs = require('fs');
+  const cur = app.getPath('userData'), old = path.join(path.dirname(cur), 'Lokal');
+  if (!process.env.LOKAL_USER_DATA && !fs.existsSync(path.join(cur, 'state.json')) && fs.existsSync(path.join(old, 'state.json'))) {
+    fs.cpSync(old, cur, { recursive: true, filter: src => !/^(lockfile|Singleton\w+)$/.test(path.basename(src)) });
+  }
+} catch (e) { /* не получилось — начнём с чистого профиля */ }
 if (process.env.LOKAL_USER_DATA) app.setPath('userData', process.env.LOKAL_USER_DATA);
 // Сайты видят обычный Chrome: без пометки Electron вход в Google и подобные сервисы работает надёжнее.
-app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|Lokal|lokal-browser)\/\S+/gi, '');
+app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|Yagodka|yagodka-browser)\/\S+/gi, '');
 
 const START = 'lokal://start';
 const TAB_PREFS = () => ({ preload: path.join(__dirname, 'preload-tab.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: true });
@@ -351,6 +359,49 @@ function toggleBookmark() {
   store.save(); pushState();
 }
 
+// ---------- пароли ----------
+// Хранятся в файле профиля, зашифрованные системой (в Windows — DPAPI, расшифровать может только эта учётная запись).
+let vault = null;
+const pwPending = new Map();
+let pwSeq = 0;
+const pwOk = () => { try { return safeStorage.isEncryptionAvailable(); } catch (e) { return false; } };
+const pwEnc = text => safeStorage.encryptString(String(text)).toString('base64');
+const pwDec = blob => { try { return safeStorage.decryptString(Buffer.from(blob, 'base64')); } catch (e) { return null; } };
+// Источник запроса берём у самой страницы в основном процессе — тому, что прислал сайт, не верим.
+function pwOrigin(e) {
+  const tab = byWc(e.sender), frame = e.senderFrame;
+  if (!tab || tab.kind === 'ext' || !frame || frame !== e.sender.mainFrame) return '';
+  try { const u = new URL(frame.url); return u.protocol === 'https:' || u.hostname === 'localhost' ? u.origin : ''; } catch (err) { return ''; }
+}
+function pwFor(origin) {
+  return vault.data.items.filter(i => i.origin === origin).sort((a, b) => (b.t || 0) - (a.t || 0))
+    .map(i => ({ id: i.id, username: i.username, password: pwDec(i.secret) })).filter(i => i.password != null);
+}
+function setupPasswords() {
+  vault = new JsonFile(path.join(app.getPath('userData'), 'passwords.json'), { items: [] });
+  ipcMain.handle('pw:get', e => {
+    const origin = pwOrigin(e);
+    if (!origin || !pwOk()) return [];
+    return pwFor(origin).map(i => ({ username: i.username, password: i.password }));
+  });
+  ipcMain.on('pw:captured', (e, c) => {
+    const origin = pwOrigin(e);
+    if (!origin || !c || store.data.settings.savePasswords === false) return;
+    const username = String(c.username || '').slice(0, 200), password = String(c.password || '');
+    if (!password || password.length > 500) return;
+    if (!pwOk()) { ui('info', { text: 'Система не даёт зашифровать пароли, поэтому сохранить их не получится.' }); return; }
+    const all = pwFor(origin);
+    const same = all.find(i => i.username === username) || (!username && all.find(i => i.password === password));
+    if (same && same.password === password) { const it = vault.data.items.find(i => i.id === same.id); it.t = Date.now(); vault.save(); return; }
+    for (const [k, v] of pwPending) if (v.origin === origin && v.username === username) pwPending.delete(k);
+    const id = ++pwSeq;
+    pwPending.set(id, { origin, username, password, replace: same ? same.id : null });
+    setTimeout(() => pwPending.delete(id), 180000);
+    const who = host(origin) + (username ? ' (' + username + ')' : '');
+    ui('info', { text: (same ? 'Обновить сохранённый пароль для ' : 'Сохранить пароль для ') + who + '?', action: same ? 'Обновить' : 'Сохранить', cmd: ['pwSave', id], hold: 30000 });
+  });
+}
+
 // ---------- меню ----------
 function popup(template) { Menu.buildFromTemplate(template.filter(Boolean)).popup({ window: win }); }
 
@@ -403,6 +454,15 @@ function pageMenu(tab, p) {
     if (/^https?:/.test(tab.url)) m.push({ label: 'Закрепить как сервис', click: () => addService(tab) });
     m.push({ label: 'Печать…', click: () => wc.print() });
     m.push({ type: 'separator' });
+  }
+  if (p.isEditable && vault && pwOk()) {
+    let origin = '';
+    try { origin = new URL(tab.url).origin; } catch (e) { /* ignore */ }
+    const creds = tab.kind === 'ext' ? [] : pwFor(origin);
+    if (creds.length) {
+      m.push({ label: 'Подставить пароль', submenu: creds.map(c => ({ label: c.username || '(без логина)', click: () => wc.send('pw:fill', { username: c.username, password: c.password }) })) });
+      m.push({ type: 'separator' });
+    }
   }
   m.push({ label: 'Просмотреть код', click: () => wc.inspectElement(p.x, p.y) });
   popup(m);
@@ -542,6 +602,7 @@ const UI = {
     if (['system', 'light', 'dark'].indexOf(patch.theme) >= 0) { s.theme = patch.theme; nativeTheme.themeSource = s.theme; }
     if (['lilac', 'sunset', 'mint', 'ocean', 'graphite'].indexOf(patch.accent) >= 0) s.accent = patch.accent;
     if (typeof patch.motion === 'boolean') s.motion = patch.motion;
+    if (typeof patch.savePasswords === 'boolean') s.savePasswords = patch.savePasswords;
     if (typeof patch.sideRatio === 'number') s.sideRatio = Math.max(0.2, Math.min(0.7, patch.sideRatio));
     store.save(); pushState();
   },
@@ -584,6 +645,28 @@ const UI = {
     store.data.extPaths = store.data.extPaths.filter(p => path.resolve(p) !== x.dir);
     store.save(); UI.extReload();
   },
+  pwSave(id) {
+    const c = pwPending.get(id);
+    if (!c || !pwOk()) return;
+    pwPending.delete(id);
+    const items = vault.data.items;
+    const old = c.replace && items.find(i => i.id === c.replace);
+    if (old) { old.secret = pwEnc(c.password); old.t = Date.now(); }
+    else items.push({ id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), origin: c.origin, username: c.username, secret: pwEnc(c.password), t: Date.now() });
+    vault.save();
+    ui('info', { text: 'Пароль сохранён. Список — в «Настройки → Пароли».' });
+  },
+  pwList() { return vault.data.items.map(i => ({ id: i.id, origin: i.origin, username: i.username, t: i.t })).sort((a, b) => a.origin.localeCompare(b.origin)); },
+  pwCopy(id) {
+    const it = vault.data.items.find(i => i.id === id), text = it && pwDec(it.secret);
+    if (text == null) return false;
+    clipboard.writeText(text);
+    // Через полминуты убираем пароль из буфера, если там всё ещё он.
+    setTimeout(() => { if (clipboard.readText() === text) clipboard.clear(); }, 30000);
+    return true;
+  },
+  pwDelete(id) { vault.data.items = vault.data.items.filter(i => i.id !== id); vault.save(); },
+  pwAvailable() { return pwOk(); },
   authReply(id, user, pass) { const cb = auths.get(id); if (!cb) return; auths.delete(id); if (user == null) cb(); else cb(String(user), String(pass || '')); },
   showItem(file) { if (downloads.has(file)) shell.showItemInFolder(file); },
 };
@@ -594,7 +677,7 @@ function createWindow() {
   const dark = nativeTheme.shouldUseDarkColors;
   win = new BrowserWindow({
     width: w.width, height: w.height, x: w.x, y: w.y, minWidth: 860, minHeight: 560, show: false,
-    title: 'Локаль', backgroundColor: (dark ? COLORS.dark : COLORS.light).bar,
+    title: 'Ягодка', backgroundColor: (dark ? COLORS.dark : COLORS.light).bar,
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: (dark ? COLORS.dark : COLORS.light).bar, symbolColor: (dark ? COLORS.dark : COLORS.light).symbol, height: 42 },
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
@@ -670,8 +753,9 @@ else {
     nativeTheme.themeSource = store.data.settings.theme || 'system';
     nativeTheme.on('updated', themeChanged);
     Menu.setApplicationMenu(null);
-    app.setAppUserModelId(app.isPackaged ? 'ru.lokal.browser' : process.execPath);
+    app.setAppUserModelId(app.isPackaged ? 'ru.yagodka.browser' : process.execPath);
     setupSession();
+    setupPasswords();
     if (process.env.LOKAL_TEST_STUB) require(process.env.LOKAL_TEST_STUB)();
 
     exts = Extensions.create({
@@ -710,6 +794,6 @@ else {
     win.webContents.focus();
     ui('auth', { id, host: authInfo.host, proxy: authInfo.isProxy });
   });
-  app.on('before-quit', () => { if (store) { saveSession(); store.flush(); } if (exts) exts.flush(); });
+  app.on('before-quit', () => { if (vault) vault.flush(); if (store) { saveSession(); store.flush(); } if (exts) exts.flush(); });
   app.on('window-all-closed', () => app.quit());
 }

@@ -12,6 +12,7 @@ module.exports = function () {
     }
     const body = '<!doctype html><html><head><meta charset="utf-8"><title>Заглушка ' + u.hostname + '</title></head><body>'
       + '<h1 id="h">' + u.hostname + u.pathname + '</h1><p>Съешь ещё этих мягких французских булок, да выпей чаю.</p>'
+      + (u.hostname === 'login.wb.ru' ? '<form id="f"><input name="login" id="u"><input type="password" id="p"><button id="b" type="button">Войти</button></form>' : '')
       + '<p><a id="blank" href="https://wiki.wb.ru/other" target="_blank">ссылка в новую вкладку</a></p><input id="inp"></body></html>';
     // Строгая политика содержимого, как на настоящих сайтах: стили расширений должны проходить и через неё.
     return new Response(body, { headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; script-src 'self'" } });

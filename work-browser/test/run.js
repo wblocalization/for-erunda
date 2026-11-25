@@ -2,7 +2,7 @@
 // Прогон браузера в виртуальном экране: xvfb-run -a npx electron test/run.js --no-sandbox --no-proxy-server
 const path = require('path'), fs = require('fs'), os = require('os');
 const { execSync } = require('child_process');
-const { app, BrowserWindow, webContents } = require('electron');
+const { app, BrowserWindow, webContents, safeStorage } = require('electron');
 
 const shots = process.env.SHOTS || path.join(os.tmpdir(), 'lokal-shots');
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'lokal-profile-'));
@@ -22,6 +22,8 @@ const page = re => webContents.getAllWebContents().find(w => re.test(w.getURL())
 
 app.whenReady().then(async () => {
   fs.mkdirSync(shots, { recursive: true });
+  // На Linux без связки ключей шифрование доступно только в простом режиме; на Windows это не нужно (там DPAPI).
+  if (process.platform === 'linux') safeStorage.setUsePlainTextEncryption(true);
   await sleep(2500);
   const uiWc = page(/ui\/index\.html/);
   uiWc.on('console-message', e => console.log('[ui]', e.message));
@@ -150,6 +152,37 @@ app.whenReady().then(async () => {
   await send('activate', (await state()).tabs.find(t => t.kind === 'tab' && /wiki\.wb\.ru\/page/.test(t.url)).id);
   await sleep(1000);
   shot('08-dark');
+
+  // Пароли: предложение сохранить, шифрование, автоподстановка после перезагрузки.
+  await send('newTab', 'https://login.wb.ru/');
+  await sleep(1800);
+  const lg = () => page(/login\.wb\.ru/);
+  await lg().executeJavaScript(`(() => { const set = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }; set('u', 'masha'); set('p', 'S3cret!пароль'); document.getElementById('b').click(); })()`);
+  await sleep(700);
+  check('браузер предложил сохранить пароль', /Сохранить пароль для login\.wb\.ru \(masha\)/.test(await ui('document.getElementById("infoText").textContent')), await ui('document.getElementById("infoText").textContent'));
+  shot('09-password-offer');
+  await ui('document.getElementById("infoAction").click(); 1');
+  await sleep(500);
+  const pwl = await send('pwList');
+  check('пароль в списке', pwl.length === 1 && pwl[0].username === 'masha' && pwl[0].origin === 'https://login.wb.ru');
+  const raw = fs.readFileSync(path.join(profile, 'passwords.json'), 'utf8');
+  check('на диске пароль зашифрован', raw.length > 0 && raw.indexOf('S3cret') < 0 && raw.indexOf('пароль') < 0);
+  lg().reload();
+  await sleep(2200);
+  const filled = await lg().executeJavaScript('({ u: document.getElementById("u").value, p: document.getElementById("p").value })');
+  check('после перезагрузки логин и пароль подставились', filled.u === 'masha' && filled.p === 'S3cret!пароль', JSON.stringify(filled));
+  const other = await page(/band\.wb\.ru/).executeJavaScript('typeof window.__locBridge + typeof window.require');
+  check('сайту пароли и мост недоступны', other === 'undefinedundefined', other);
+  await ui('openSettings("passwords"); 1');
+  await sleep(900);
+  shot('10-passwords');
+  await ui('closeOverlay(); 1');
+  await sleep(400);
+  s = await state();
+  await send('closeTab', s.tabs.find(t => /login\.wb\.ru/.test(t.url)).id);
+  await sleep(400);
+  await send('activate', (await state()).tabs.find(t => t.kind === 'tab' && /wiki\.wb\.ru\/page/.test(t.url)).id);
+  await sleep(500);
 
   await send('toggleBookmark');
   await sleep(300);

@@ -27,7 +27,7 @@ class JsonFile {
 }
 
 const DEFAULTS = () => ({
-  settings: { search: 'yandex', theme: 'system', accent: 'lilac', motion: true, sideRatio: 0.36 },
+  settings: { search: 'yandex', theme: 'system', accent: 'lilac', motion: true, savePasswords: true, sideRatio: 0.36 },
   services: [
     { id: 'mail', name: 'Почта', url: 'https://mail.rwb.ru/' },
     { id: 'band', name: 'Band', url: 'https://band.wb.ru/' },

@@ -1,11 +1,11 @@
-name: Lokal browser (Windows)
+name: Yagodka browser (Windows)
 
 on:
   workflow_dispatch:
   push:
     paths:
       - 'work-browser/**'
-      - '.github/workflows/lokal-browser.yml'
+      - '.github/workflows/yagodka-browser.yml'
 
 jobs:
   build:
@@ -24,6 +24,6 @@ jobs:
       - run: npm run dist
       - uses: actions/upload-artifact@v4
         with:
-          name: Lokal-windows
+          name: Yagodka-windows
           path: work-browser/dist/*.zip
           if-no-files-found: error

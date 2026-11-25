@@ -1,5 +1,5 @@
 'use strict';
-// Интерфейс «Локали»: вкладки, колонка сервисов и расширений, адресная строка, вторая панель, быстрый переход, настройки.
+// Интерфейс «Ягодки»: вкладки, колонка сервисов и расширений, адресная строка, вторая панель, быстрый переход, настройки.
 const $ = id => document.getElementById(id);
 const api = window.lokal;
 let S = null;            // состояние от основного процесса
@@ -25,7 +25,9 @@ const ICON = {
   trash: '<path d="M3.5 5h9M6.5 5V3.5h3V5M5 5l.5 8h5L11 5"/>',
   globe: '<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11"/>',
   pin: '<path d="M8 2v7M4.5 9h7M8 9v5M5.5 2h5"/>',
-  logo: '<rect x="2.2" y="3.4" width="11.6" height="9.2" rx="2"/><path d="M9.6 3.4v9.2"/><circle cx="5.9" cy="8" r=".9" fill="currentColor"/>',
+  logo: '<circle cx="8" cy="9.6" r="4.3" fill="currentColor" stroke="none"/><path d="M8 5.2c.1-1.6 1.1-2.7 2.9-2.9"/><path d="M7.9 5.1C6.9 3.6 5.5 3.3 4.2 3.8"/>',
+  copy: '<rect x="5.5" y="5.5" width="7.5" height="7.5" rx="1.6"/><path d="M10.5 5.5V4.2A1.2 1.2 0 0 0 9.3 3H4.2A1.2 1.2 0 0 0 3 4.2v5.1a1.2 1.2 0 0 0 1.2 1.2h1.3"/>',
+  key: '<circle cx="5.5" cy="10.5" r="2.6"/><path d="m7.4 8.6 5.4-5.4M10.6 5.4l1.7 1.7"/>',
 };
 const svg = n => '<svg viewBox="0 0 16 16" aria-hidden="true">' + ICON[n] + '</svg>';
 
@@ -376,7 +378,8 @@ function openSettings(tab) {
   let lookups = S.lookups.map(l => Object.assign({}, l));
   openOverlay('settings', d => {
     const body = h('div', { class: 'set-body' });
-    const TABS = [['services', 'Сервисы'], ['lookups', 'Перевод выделенного'], ['extensions', 'Расширения'], ['general', 'Общее']];
+    const TABS = [['services', 'Сервисы'], ['lookups', 'Перевод выделенного'], ['extensions', 'Расширения'], ['passwords', 'Пароли'], ['general', 'Общее']];
+    const pwBox = h('div');
     const tabsEl = h('div', { class: 'set-tabs' });
     d.append(h('div', { class: 'set-head' }, h('h1', null, 'Настройки'), h('button', { class: 'icon-btn', icon: 'x', title: 'Закрыть', onclick: () => closeOverlay() })), tabsEl, body);
 
@@ -417,6 +420,25 @@ function openSettings(tab) {
           h('button', { class: 'btn', onclick: () => api.send('extAdd') }, 'Добавить из папки…'),
           h('button', { class: 'btn ghost', onclick: () => api.send('extReload') }, 'Перезапустить расширения')),
       ],
+      passwords: () => {
+        const load = async () => {
+          const ok = await api.send('pwAvailable'), list = ok ? await api.send('pwList') : [];
+          pwBox.replaceChildren(...(!ok ? [h('p', { class: 'note' }, 'Система не даёт зашифровать пароли, поэтому сохранение недоступно.')]
+            : !list.length ? [h('p', { class: 'note' }, 'Пока ничего не сохранено. Войдите на любой сайт — браузер предложит запомнить пароль.')]
+            : list.map(i => h('div', { class: 'ext-card pw-row' },
+              h('span', { class: 'pw-ico', icon: 'key' }),
+              h('div', { class: 'meta' }, h('b', null, prettyUrl(i.origin)), h('span', null, i.username || 'без логина')),
+              h('div', { class: 'acts', style: 'flex-direction:row' },
+                h('button', { class: 'btn ghost', onclick: async () => { toast(await api.send('pwCopy', i.id) ? 'Пароль скопирован. Через 30 секунд он сам сотрётся из буфера.' : 'Не удалось расшифровать пароль.'); } }, 'Скопировать'),
+                h('button', { class: 'btn danger', onclick: async () => { await api.send('pwDelete', i.id); load(); } }, 'Удалить'))))));
+        };
+        load();
+        return [
+          h('p', { class: 'note' }, 'Пароли хранятся только на этом компьютере и зашифрованы средствами Windows: открыть их можно лишь под вашей учётной записью. Подставить сохранённый пароль вручную — правая кнопка мыши в поле ввода.'),
+          h('div', { class: 'foot', style: 'margin:0 0 14px' }, h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: S.settings.savePasswords !== false, onchange: e => api.send('saveSettings', { savePasswords: e.target.checked }) }), 'Предлагать сохранять пароли')),
+          pwBox,
+        ];
+      },
       general: () => [
         h('label', { class: 'lbl', for: 'setSearch' }, 'Поиск из адресной строки'),
         h('select', { class: 'field', id: 'setSearch', style: 'max-width:260px', onchange: e => api.send('saveSettings', { search: e.target.value }) },
@@ -436,7 +458,7 @@ function openSettings(tab) {
           h('button', { class: 'btn ghost', onclick: () => api.send('clearHistory') }, 'Очистить историю'),
           h('button', { class: 'btn danger', onclick: () => api.send('clearData') }, 'Выйти со всех сайтов…')),
         h('h2', null, 'О программе'),
-        h('p', { class: 'note' }, 'Локаль ' + S.version + ' — рабочий браузер на Chromium.'),
+        h('p', { class: 'note' }, 'Ягодка ' + S.version + ' — рабочий браузер на Chromium.'),
       ],
     };
     function draw() {
@@ -463,7 +485,7 @@ function openAuth(p) {
 }
 
 // ---------- строка сообщений и поиск по странице ----------
-function toast(text, action, cmd) {
+function toast(text, action, cmd, hold) {
   $('infoText').textContent = text;
   $('infoText').title = text;
   $('infoAction').hidden = !action;
@@ -471,7 +493,7 @@ function toast(text, action, cmd) {
   $('infoAction').onclick = cmd ? () => { api.send(...cmd); hideInfo(); } : null;
   $('infobar').hidden = false;
   clearTimeout(infoTimer);
-  infoTimer = setTimeout(hideInfo, 9000);
+  infoTimer = setTimeout(hideInfo, hold || 9000);
 }
 function hideInfo() { $('infobar').hidden = true; clearTimeout(infoTimer); }
 
@@ -571,7 +593,7 @@ api.on((name, p) => {
     else if (p === 'settings') openSettings();
     else if (p.indexOf('settings:') === 0) openSettings(p.slice(9));
   } else if (name === 'found') $('findCount').textContent = p.total ? p.active + ' из ' + p.total : 'не найдено';
-  else if (name === 'info') toast(p.text, p.action, p.cmd);
+  else if (name === 'info') toast(p.text, p.action, p.cmd, p.hold);
   else if (name === 'auth') openAuth(p);
 });
 api.send('ready');

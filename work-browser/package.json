@@ -1,13 +1,13 @@
 {
-  "name": "lokal-browser",
-  "productName": "Lokal",
-  "version": "0.2.1",
-  "description": "Локаль — рабочий браузер: закреплённые сервисы, вторая панель и свои расширения из папки.",
+  "name": "yagodka-browser",
+  "productName": "Yagodka",
+  "version": "0.3.0",
+  "description": "Ягодка — рабочий браузер: закреплённые сервисы, вторая панель, свои расширения из папки и сохранение паролей.",
   "main": "src/main.js",
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "electron test/run.js --no-sandbox --no-proxy-server",
+    "test": "electron test/run.js --no-sandbox --no-proxy-server --password-store=basic",
     "dist": "electron-builder --win zip --publish never"
   },
   "devDependencies": {
@@ -15,8 +15,8 @@
     "electron-builder": "^26.18.0"
   },
   "build": {
-    "appId": "ru.lokal.browser",
-    "productName": "Lokal",
+    "appId": "ru.yagodka.browser",
+    "productName": "Yagodka",
     "files": [
       "src/**/*",
       "ui/**/*",
@@ -88,6 +88,6 @@
       ],
       "icon": "build/icon.png"
     },
-    "artifactName": "Lokal-${version}-win.${ext}"
+    "artifactName": "Yagodka-${version}-win.${ext}"
   }
 }

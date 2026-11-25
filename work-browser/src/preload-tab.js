@@ -3,6 +3,74 @@
 // только запускает расширения — контент-скрипты на подходящих сайтах и chrome.* на страницах расширений.
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
+// ---- пароли: запомнить при входе и подставить в следующий раз ----
+(function () {
+  if (!process.isMainFrame || (location.protocol !== 'https:' && location.hostname !== 'localhost')) return;
+  const USER_TYPES = ['text', 'email', 'tel', ''];
+  const shown = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  const userLike = el => el instanceof HTMLInputElement && USER_TYPES.indexOf((el.getAttribute('type') || '').toLowerCase()) >= 0;
+  let lastUser = '', sent = '';
+
+  function setValue(el, value) {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  // Поле логина — ближайшее текстовое поле перед полем пароля (в той же форме, если она есть).
+  function userField(pw) {
+    const all = [...(pw.form || document).querySelectorAll('input')];
+    for (let i = all.indexOf(pw) - 1; i >= 0; i--) if (userLike(all[i]) && (shown(all[i]) || all[i].value)) return all[i];
+    return null;
+  }
+  function capture() {
+    const filled = [...document.querySelectorAll('input[type=password]')].filter(p => p.value);
+    if (!filled.length) return;
+    const pw = filled[filled.length - 1], u = userField(pw);
+    const cred = { username: (u && u.value.trim()) || lastUser, password: pw.value };
+    const key = cred.username + '\n' + cred.password;
+    if (key === sent) return;
+    sent = key;
+    ipcRenderer.send('pw:captured', cred);
+  }
+  function fill(cred, force) {
+    const pw = [...document.querySelectorAll('input[type=password]')].find(p => shown(p) && (force || !p.value));
+    if (!pw) return false;
+    const u = userField(pw);
+    if (u && cred.username && (force || !u.value)) setValue(u, cred.username);
+    setValue(pw, cred.password);
+    sent = cred.username + '\n' + cred.password;
+    return true;
+  }
+
+  document.addEventListener('change', e => {
+    const el = e.target;
+    if (userLike(el) && el.value && /user|login|email|mail|логин|почт|name/i.test((el.name || '') + (el.id || '') + (el.autocomplete || '') + (el.placeholder || ''))) lastUser = el.value.trim();
+  }, true);
+  document.addEventListener('submit', capture, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target instanceof HTMLInputElement) capture(); }, true);
+  document.addEventListener('click', e => { if (e.target instanceof Element && e.target.closest('button, input[type=submit], input[type=button], [role=button], a')) capture(); }, true);
+  window.addEventListener('pagehide', capture);
+
+  ipcRenderer.on('pw:fill', (e, cred) => { if (cred) fill(cred, true); });
+
+  // Автоподстановка: форма входа может появиться не сразу, поэтому первые секунды следим за страницей.
+  let creds = null, done = false;
+  async function auto() {
+    if (done || !document.querySelector('input[type=password]')) return;
+    if (!creds) creds = ipcRenderer.invoke('pw:get');
+    const list = await creds;
+    if (done || !list || !list.length) return;
+    if (fill(list[0], false)) done = true;
+  }
+  const start = () => {
+    auto();
+    const mo = new MutationObserver(() => { clearTimeout(mo.t); mo.t = setTimeout(auto, 150); });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(() => mo.disconnect(), 20000);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();
+})();
+
 (function () {
   if (!process.isMainFrame) return;
   const proto = location.protocol;

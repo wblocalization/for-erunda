@@ -281,3 +281,6 @@ label.lbl { display: block; color: var(--muted); margin: 0 0 4px; }
 /* Анимации выключены в настройках или в системе */
 :root.still *, :root.still *::before, :root.still *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; } }
+
+.pw-row { align-items: center; }
+.pw-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--soft); color: var(--accent); flex: none; }
