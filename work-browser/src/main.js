@@ -11,12 +11,17 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'locext', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, corsEnabled: true, stream: true } },
 ]);
 app.setName('Yagodka');
-// Корпоративные антивирусы и агенты защиты внедряют свои библиотеки в чужие процессы. Неподписанный Electron
-// из-за этого роняет процесс окна (встроенная проверка целостности). Отключаем проверку — обычный приём для
-// таких сборок; без этого на рабочих машинах окно падает и остаётся пустым.
-if (process.platform === 'win32') app.commandLine.appendSwitch('disable-features', 'RendererCodeIntegrity');
-// Видеоускорение можно выключить запуском с «--software», если на какой-то машине мешает именно оно.
+// На рабочих Windows-машинах с агентами безопасности процесс окна падает (STATUS_BREAKPOINT): не поднимается
+// защищённый режим и мешает проверка целостности неподписанной сборки. Отключаем и то и другое — обычный приём.
+// На других системах оставляем всё как есть (в т.ч. защищённый режим вкладок).
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-features', 'RendererCodeIntegrity');
+  app.disableHardwareAcceleration();
+}
+// Видеоускорение можно выключить и на других системах запуском с «--software».
 if (process.argv.includes('--software')) app.disableHardwareAcceleration();
+const WIN_SANDBOX = process.platform !== 'win32';   // защищённый режим окон: везде да, на Windows нет
 let uiReady = false, uiReloaded = false;
 // Короткий журнал запуска рядом с профилем — чтобы было что прислать, если окно осталось пустым.
 function diag(line) {
@@ -44,7 +49,7 @@ const T0 = (process.getCreationTime && process.getCreationTime()) || Date.now();
 const startup = { main: Math.round(Date.now() - T0) };
 const mark = name => { if (startup[name] == null) startup[name] = Math.round(Date.now() - T0); };
 let restoring = false;
-const TAB_PREFS = () => ({ preload: path.join(__dirname, 'preload-tab.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: true });
+const TAB_PREFS = () => ({ preload: path.join(__dirname, 'preload-tab.js'), sandbox: WIN_SANDBOX, contextIsolation: true, nodeIntegration: false, spellcheck: true });
 const COLORS = { light: { bar: '#f1eefa', symbol: '#2b2440' }, dark: { bar: '#13101b', symbol: '#e9e4f5' } };
 
 let win, store, exts;
@@ -735,7 +740,7 @@ function createWindow() {
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: (dark ? COLORS.dark : COLORS.light).bar, symbolColor: (dark ? COLORS.dark : COLORS.light).symbol, height: 42 },
     icon: path.join(__dirname, '..', 'build', 'icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload-ui.js'), sandbox: true, contextIsolation: true, nodeIntegration: false },
+    webPreferences: { preload: path.join(__dirname, 'preload-ui.js'), sandbox: WIN_SANDBOX, contextIsolation: true, nodeIntegration: false },
   });
   if (w.maximized) win.maximize();
   win.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
@@ -774,7 +779,7 @@ function blankHelp() {
   dialog.showMessageBox(win && !win.isDestroyed() ? win : undefined, {
     type: 'warning', buttons: ['Понятно'], title: 'Ягодка',
     message: 'Окно открылось, но пустое',
-    detail: 'Скорее всего, виновата видеокарта. Закройте браузер и запустите его ещё раз.\n\nЕсли это повторится — пришлите в команду локализации файл журнала:\n' + log + '\n\n(путь можно вставить в адресную строку проводника).',
+    detail: 'Не удалось запустить окно браузера. Закройте его и откройте ещё раз.\n\nЕсли это повторится — пришлите в команду локализации файл журнала:\n' + log + '\n\n(путь можно вставить в адресную строку проводника).',
   }).catch(() => {});
 }
 

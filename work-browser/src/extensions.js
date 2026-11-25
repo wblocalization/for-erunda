@@ -29,6 +29,7 @@ const compile = list => (list || []).map(patternToRegExp).filter(Boolean);
 const matches = (res, url) => res.some(re => re.test(url));
 
 function create({ userData, bundledDir, only, store, host }) {
+  const SANDBOX = process.platform !== 'win32';   // на Windows защищённый режим окон отключён (иначе падает)
   const byId = new Map();
   const pending = new Map();
   const notes = new Map();
@@ -245,7 +246,7 @@ function create({ userData, bundledDir, only, store, host }) {
         if (!target.startsWith(ext.baseUrl)) throw new Error('Страница должна быть из расширения');
         const w = ext.offscreen = new BrowserWindow({
           show: false, width: 300, height: 200,
-          webPreferences: { preload: path.join(__dirname, 'preload-tab.js'), sandbox: true, contextIsolation: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
+          webPreferences: { preload: path.join(__dirname, 'preload-tab.js'), sandbox: SANDBOX, contextIsolation: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
         });
         await w.loadURL(target);
         return;
@@ -324,7 +325,7 @@ function create({ userData, bundledDir, only, store, host }) {
     if (!bg || !(bg.service_worker || (bg.scripts && bg.scripts.length)) || !enabled(ext)) return;
     ext.bg = new BrowserWindow({
       show: false, width: 400, height: 300,
-      webPreferences: { preload: path.join(__dirname, 'preload-tab.js'), sandbox: true, contextIsolation: true, backgroundThrottling: false },
+      webPreferences: { preload: path.join(__dirname, 'preload-tab.js'), sandbox: SANDBOX, contextIsolation: true, backgroundThrottling: false },
     });
     ext.bg.webContents.on('console-message', (e) => { if (process.env.LOKAL_DEBUG) console.log('[' + ext.id + ']', e.message); });
     ext.bg.loadURL(ext.baseUrl + '_background.html');
