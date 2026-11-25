@@ -2,6 +2,7 @@
 // Прогон браузера в виртуальном экране: xvfb-run -a npx electron test/run.js --no-sandbox --no-proxy-server
 const path = require('path'), fs = require('fs'), os = require('os');
 const { execSync } = require('child_process');
+const crypto = require('crypto');
 const { app, BrowserWindow, webContents, safeStorage } = require('electron');
 
 const shots = process.env.SHOTS || path.join(os.tmpdir(), 'lokal-shots');
@@ -30,6 +31,7 @@ app.whenReady().then(async () => {
   const ui = code => uiWc.executeJavaScript(code, true);
   const state = () => ui('JSON.parse(JSON.stringify(S))');
   const send = (...a) => ui('window.lokal.send(...' + JSON.stringify(a) + ')');
+  const main = fn => fn(require('electron'));
 
   let s = await state();
   check('стартовая вкладка', s.tabs.length === 1 && s.tabs[0].start);
@@ -184,10 +186,51 @@ app.whenReady().then(async () => {
   await send('activate', (await state()).tabs.find(t => t.kind === 'tab' && /wiki\.wb\.ru\/page/.test(t.url)).id);
   await sleep(500);
 
+  // Перенос из Chrome: собираем игрушечный профиль (закладки, история, зашифрованная кука) и переносим его.
+  const impRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-'));
+  const key = crypto.randomBytes(32);
+  process.env.LOKAL_IMPORT_ROOT = impRoot;
+  process.env.LOKAL_IMPORT_KEY = key.toString('base64');
+  const def = path.join(impRoot, 'Default');
+  fs.mkdirSync(path.join(def, 'Network'), { recursive: true });
+  fs.writeFileSync(path.join(impRoot, 'Local State'), JSON.stringify({ os_crypt: { encrypted_key: Buffer.concat([Buffer.from('DPAPI'), Buffer.from('x')]).toString('base64') } }));
+  fs.writeFileSync(path.join(def, 'Bookmarks'), JSON.stringify({ roots: { bookmark_bar: { children: [
+    { type: 'url', name: 'Вайлдберриз', url: 'https://www.wildberries.ru/' },
+    { type: 'folder', name: 'Работа', children: [{ type: 'url', name: 'Вики', url: 'https://wiki.wb.ru/' }] }] } } }));
+  const { DatabaseSync } = require('node:sqlite');
+  const micros = Date.now() * 1000 + 11644473600000000;
+  const hdb = new DatabaseSync(path.join(def, 'History'));
+  hdb.exec('CREATE TABLE urls(url TEXT, title TEXT, last_visit_time INTEGER)');
+  hdb.prepare('INSERT INTO urls VALUES(?,?,?)').run('https://smartcat.com/', 'Smartcat', String(micros));
+  hdb.close();
+  const nonce = crypto.randomBytes(12);
+  const ci = crypto.createCipheriv('aes-256-gcm', key, nonce);
+  const enc = Buffer.concat([Buffer.from('v10'), nonce, ci.update('session-token-123', 'utf8'), ci.final(), ci.getAuthTag()]);
+  const ck = new DatabaseSync(path.join(def, 'Network', 'Cookies'));
+  ck.exec('CREATE TABLE cookies(host_key TEXT, name TEXT, encrypted_value BLOB, value TEXT, path TEXT, expires_utc INTEGER, is_secure INTEGER, is_httponly INTEGER, samesite INTEGER)');
+  ck.prepare('INSERT INTO cookies VALUES(?,?,?,?,?,?,?,?,?)').run('.wb.ru', 'auth', enc, '', '/', String(micros + 31536000000000), 1, 1, 1);
+  ck.close();
+
+  const scanned = await send('importScan');
+  check('импорт нашёл игрушечный профиль', scanned.length === 1 && scanned[0].profiles.length === 1, JSON.stringify(scanned));
+  const imp = await send('importRun', impRoot, 'Default', { bookmarks: true, history: true, cookies: true });
+  check('перенос закладок из Chrome', imp.added && imp.added.bookmarks === 2, JSON.stringify(imp));
+  check('перенос истории из Chrome', imp.added.history === 1);
+  check('перенос и расшифровка куки', imp.added.cookies === 1 && !imp.noKey, JSON.stringify(imp));
+  s = await state();
+  check('закладки появились в браузере', s.bookmarks.some(b => b.url === 'https://www.wildberries.ru/') && s.bookmarks.some(b => b.url === 'https://wiki.wb.ru/'));
+  const cookieVal = await main(({ session }) => session.defaultSession.cookies.get({ url: 'https://www.wb.ru/' }).then(cs => (cs.find(c => c.name === 'auth') || {}).value));
+  check('кука расшифрована и видна сайту wb.ru', cookieVal === 'session-token-123', String(cookieVal));
+  await ui('openSettings("import"); 1');
+  await sleep(900);
+  shot('11-import');
+  await ui('closeOverlay(); 1');
+  await sleep(300);
+
   await send('toggleBookmark');
   await sleep(300);
   s = await state();
-  check('закладка добавлена', s.bookmarks.length === 1);
+  check('закладка добавлена', s.bookmarks.length >= 3);
   const n = s.tabs.filter(t => t.kind === 'tab').length;
   await send('closeTab', s.activeId);
   await sleep(600);
@@ -196,7 +239,7 @@ app.whenReady().then(async () => {
 
   app.once('will-quit', () => {
     const saved = JSON.parse(fs.readFileSync(path.join(profile, 'state.json'), 'utf8'));
-    check('сессия сохранена на диск', saved.session.tabs.length >= 1 && saved.bookmarks.length === 1, saved.session.tabs.map(t => t.url).join(' '));
+    check('сессия сохранена на диск', saved.session.tabs.length >= 1 && saved.bookmarks.length >= 1, saved.session.tabs.map(t => t.url).join(' '));
     check('хранилище расширения сохранено', fs.existsSync(path.join(profile, 'ext-storage', 'loc-requests-extension.json')));
     console.log(failed ? '\nПровалено проверок: ' + failed : '\nВсе проверки прошли');
     process.exitCode = failed ? 1 : 0;

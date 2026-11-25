@@ -2,8 +2,10 @@
 // «Ягодка» — рабочий браузер: вкладки, закреплённые сервисы, вторая панель рядом и свои расширения из папки.
 const path = require('path');
 const { app, BrowserWindow, WebContentsView, ipcMain, Menu, shell, dialog, session, nativeTheme, clipboard, protocol, safeStorage } = require('electron');
+const fsmod = require('fs');
 const { JsonFile, DEFAULTS, SEARCH } = require('./store');
 const Extensions = require('./extensions');
+const Import = require('./import');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'locext', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, corsEnabled: true, stream: true } },
@@ -667,9 +669,40 @@ const UI = {
   },
   pwDelete(id) { vault.data.items = vault.data.items.filter(i => i.id !== id); vault.save(); },
   pwAvailable() { return pwOk(); },
+  // Перенос из другого браузера.
+  importScan() { try { return Import.scan(); } catch (e) { return []; } },
+  async importRun(browserDir, profileId, want) {
+    want = want || {};
+    if (!allowedImportDir(browserDir)) throw new Error('Недоступная папка');
+    let r;
+    try { r = Import.collect(browserDir, profileId, { bookmarks: !!want.bookmarks, history: !!want.history, cookies: !!want.cookies }); }
+    catch (e) { return { error: String(e && e.message || e) }; }
+    const added = { bookmarks: 0, history: 0, cookies: 0 };
+    if (want.bookmarks && r.bookmarks.length) {
+      const have = new Set(store.data.bookmarks.map(b => b.url));
+      r.bookmarks.forEach(b => { if (!have.has(b.url)) { store.data.bookmarks.push({ url: b.url, title: b.title }); have.add(b.url); added.bookmarks++; } });
+    }
+    if (want.history && r.history.length) {
+      const have = new Set(store.data.history.map(h => h.url));
+      r.history.forEach(h => { if (!have.has(h.url)) { store.data.history.push({ url: h.url, title: h.title, t: h.t }); have.add(h.url); added.history++; } });
+      store.data.history.sort((a, b) => (b.t || 0) - (a.t || 0));
+      if (store.data.history.length > 5000) store.data.history.length = 5000;
+    }
+    if ((want.bookmarks || want.history)) store.save();
+    for (const c of (want.cookies ? r.cookies : [])) {
+      try { await session.defaultSession.cookies.set(c); added.cookies++; } catch (e) { /* куку отвергли (домен/срок) — пропускаем */ }
+    }
+    pushState();
+    return { added, locked: r.locked, noKey: r.noKey, skipped: r.skipped };
+  },
   authReply(id, user, pass) { const cb = auths.get(id); if (!cb) return; auths.delete(id); if (user == null) cb(); else cb(String(user), String(pass || '')); },
   showItem(file) { if (downloads.has(file)) shell.showItemInFolder(file); },
 };
+
+// Разрешаем переносить только из настоящих папок браузеров (или тестовой), не из произвольного пути от интерфейса.
+function allowedImportDir(dir) {
+  try { return Import.scan().some(b => b.dir === dir); } catch (e) { return false; }
+}
 
 // ---------- запуск ----------
 function createWindow() {

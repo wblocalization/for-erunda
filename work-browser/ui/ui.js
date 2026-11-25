@@ -378,7 +378,7 @@ function openSettings(tab) {
   let lookups = S.lookups.map(l => Object.assign({}, l));
   openOverlay('settings', d => {
     const body = h('div', { class: 'set-body' });
-    const TABS = [['services', 'Сервисы'], ['lookups', 'Перевод выделенного'], ['extensions', 'Расширения'], ['passwords', 'Пароли'], ['general', 'Общее']];
+    const TABS = [['services', 'Сервисы'], ['lookups', 'Перевод выделенного'], ['extensions', 'Расширения'], ['passwords', 'Пароли'], ['import', 'Перенос'], ['general', 'Общее']];
     const pwBox = h('div');
     const tabsEl = h('div', { class: 'set-tabs' });
     d.append(h('div', { class: 'set-head' }, h('h1', null, 'Настройки'), h('button', { class: 'icon-btn', icon: 'x', title: 'Закрыть', onclick: () => closeOverlay() })), tabsEl, body);
@@ -438,6 +438,43 @@ function openSettings(tab) {
           h('div', { class: 'foot', style: 'margin:0 0 14px' }, h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: S.settings.savePasswords !== false, onchange: e => api.send('saveSettings', { savePasswords: e.target.checked }) }), 'Предлагать сохранять пароли')),
           pwBox,
         ];
+      },
+      import: () => {
+        const box = h('div');
+        const want = { bookmarks: true, history: true, cookies: true };
+        const load = () => {
+          const found = api.send('importScan');
+          found.then(list => {
+            if (!list.length) { box.replaceChildren(h('p', { class: 'note' }, 'Не нашла установленный Chrome, Edge, Яндекс или другой браузер на Chromium. Если он есть, но не виден — скажи, добавлю.')); return; }
+            const pick = [['bookmarks', 'Закладки'], ['history', 'Историю'], ['cookies', 'Куки (чтобы не перелогиниваться)']];
+            box.replaceChildren(
+              h('p', { class: 'note' }, 'Перед переносом куки и истории ЗАКРОЙ браузер-источник полностью, иначе его файлы заняты. Закладки переносятся и так. Ничего в том браузере не меняется — только читаем.'),
+              h('div', { class: 'foot', style: 'margin:0 0 14px' }, pick.map(x => h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: want[x[0]], onchange: e => { want[x[0]] = e.target.checked; } }), x[1]))),
+              ...list.map(b => h('div', { class: 'ext-card', style: 'flex-direction:column;gap:8px' },
+                h('b', null, b.name),
+                h('div', { class: 'rows', style: 'width:100%' }, b.profiles.map(pr => h('div', { class: 'grid-row', style: 'grid-template-columns:1fr auto' },
+                  h('span', null, 'Профиль: ' + pr.name),
+                  h('button', { class: 'btn', onclick: async ev => {
+                    const btn = ev.target; btn.disabled = true; btn.textContent = 'Переношу…';
+                    const r = await api.send('importRun', b.dir, pr.id, want);
+                    btn.disabled = false; btn.textContent = 'Перенести';
+                    if (r.error) return toast('Не вышло: ' + r.error);
+                    if (r.locked) return toast('Закрой ' + b.name + ' полностью и попробуй снова — его файлы сейчас заняты.');
+                    const parts = [];
+                    if (r.added.bookmarks != null && want.bookmarks) parts.push(r.added.bookmarks + ' закладок');
+                    if (r.added.history != null && want.history) parts.push(r.added.history + ' из истории');
+                    if (want.cookies) parts.push(r.added.cookies + ' сайтов (куки)');
+                    let msg = 'Перенесено: ' + (parts.join(', ') || 'ничего нового') + '.';
+                    if (r.noKey) msg += ' Куки не удалось расшифровать — это работает только на том же Windows, где стоит браузер.';
+                    else if (r.skipped) msg += ' ' + r.skipped + ' куки пропущено (новое шифрование Chrome).';
+                    if (want.cookies && r.added.cookies) msg += ' Открой нужный сайт — вход должен подхватиться.';
+                    toast(msg, null, null, 14000);
+                  } }, 'Перенести'))))))
+            );
+          });
+        };
+        load();
+        return [h('p', { class: 'note' }, 'Перенос закладок, истории и входов на сайты из Chrome (а также Edge, Яндекс.Браузера и других на Chromium).'), box];
       },
       general: () => [
         h('label', { class: 'lbl', for: 'setSearch' }, 'Поиск из адресной строки'),
