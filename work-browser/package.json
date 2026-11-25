@@ -1,7 +1,7 @@
 {
   "name": "yagodka-browser",
   "productName": "Yagodka",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Ягодка — рабочий браузер: закреплённые сервисы, вторая панель, свои расширения из папки, пароли и перенос из Chrome.",
   "main": "src/main.js",
   "private": true,

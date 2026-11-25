@@ -11,6 +11,18 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'locext', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, corsEnabled: true, stream: true } },
 ]);
 app.setName('Yagodka');
+// На части Windows-машин (особенно виртуальных и по удалёнке) аппаратное ускорение рисует пустое окно.
+// Поэтому по умолчанию на Windows рисуем программно — надёжно везде; вернуть ускорение можно запуском с «--gpu».
+if (process.platform === 'win32' && !process.argv.includes('--gpu')) app.disableHardwareAcceleration();
+let uiReady = false, uiReloaded = false;
+// Короткий журнал запуска рядом с профилем — чтобы было что прислать, если окно осталось пустым.
+function diag(line) {
+  try {
+    const fs = require('fs');
+    const file = path.join(app.getPath('userData'), 'startup.log');
+    fs.appendFileSync(file, new Date().toISOString() + '  ' + line + '\n');
+  } catch (e) { /* не критично */ }
+}
 // Браузер раньше назывался «Локаль»: при первом запуске под новым именем переносим его профиль (вкладки, входы на сайты, настройки).
 try {
   const fs = require('fs');
@@ -552,7 +564,7 @@ const MENUS = {
 
 // ---------- команды интерфейса ----------
 const UI = {
-  ready() { mark('ready'); pushState(); },
+  ready() { uiReady = true; mark('ready'); diag('интерфейс готов'); pushState(); },
   layout(r) { rects = { main: r && r.main, side: r && r.side }; applyLayout(); },
   async snapshot() {
     const shot = async id => {
@@ -726,7 +738,16 @@ function createWindow() {
   win.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
   win.show();          // сразу, не дожидаясь отрисовки: окно появляется мгновенно, интерфейс дорисовывается следом
   mark('window');
-  win.webContents.once('did-finish-load', () => mark('ui'));
+  try { diag('запуск; ускорение=' + (process.platform === 'win32' && !process.argv.includes('--gpu') ? 'выкл' : 'вкл') + '; видео=' + JSON.stringify(app.getGPUFeatureStatus().gpu_compositing || '?')); } catch (e) { /* ignore */ }
+  win.webContents.once('did-finish-load', () => { mark('ui'); diag('интерфейс загружен'); });
+  // Если интерфейс не ожил (пустое окно) — один раз перезагружаем, потом подсказываем, куда смотреть.
+  const watchdog = setTimeout(() => {
+    if (uiReady || !win || win.isDestroyed()) return;
+    if (!uiReloaded) { uiReloaded = true; diag('интерфейс не ответил за 7 с — перезагрузка'); win.webContents.reloadIgnoringCache(); setTimeout(() => { if (!uiReady && win && !win.isDestroyed()) blankHelp(); }, 7000); }
+  }, 7000);
+  win.webContents.on('did-finish-load', () => clearTimeout(watchdog));
+  win.webContents.on('did-fail-load', (e, code, desc) => { diag('не загрузился интерфейс: ' + code + ' ' + desc); blankHelp(); });
+  win.webContents.on('render-process-gone', (e, d) => { diag('процесс интерфейса завершился: ' + d.reason); if (d.reason !== 'clean-exit') blankHelp(); });
   win.webContents.on('before-input-event', onKey(null));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', e => e.preventDefault());
@@ -739,6 +760,19 @@ function createWindow() {
   };
   win.on('resized', remember); win.on('moved', remember); win.on('maximize', remember); win.on('unmaximize', remember);
   win.on('closed', () => { win = null; app.quit(); });
+}
+
+// Окно открылось, но пустое: объясняем, что делать, и даём путь к журналу.
+let blankShown = false;
+function blankHelp() {
+  if (blankShown || uiReady) return;
+  blankShown = true;
+  const log = (() => { try { return path.join(app.getPath('userData'), 'startup.log'); } catch (e) { return 'startup.log'; } })();
+  dialog.showMessageBox(win && !win.isDestroyed() ? win : undefined, {
+    type: 'warning', buttons: ['Понятно'], title: 'Ягодка',
+    message: 'Окно открылось, но пустое',
+    detail: 'Скорее всего, виновата видеокарта. Закройте браузер и запустите его ещё раз.\n\nЕсли это повторится — пришлите в команду локализации файл журнала:\n' + log + '\n\n(путь можно вставить в адресную строку проводника).',
+  }).catch(() => {});
 }
 
 // При запуске из исходников берём из соседних папок только те расширения, что входят в сборку.
