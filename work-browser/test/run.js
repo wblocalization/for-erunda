@@ -9,6 +9,7 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'lokal-profile-'));
 process.env.LOKAL_USER_DATA = profile;
 process.env.LOKAL_TEST_STUB = path.join(__dirname, 'stub.js');
 process.env.LOKAL_EXT_DIR = path.join(__dirname, '..', '..');
+process.env.LOKAL_EXT_ALL = '1';   // в проверках участвуют все расширения из репозитория, не только встроенные в сборку
 require('../src/main.js');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -31,7 +32,7 @@ app.whenReady().then(async () => {
   let s = await state();
   check('стартовая вкладка', s.tabs.length === 1 && s.tabs[0].start);
   check('сервисы по умолчанию', s.services.length === 6);
-  check('расширения найдены', s.extensions.length >= 4, s.extensions.map(x => x.id).join(','));
+  check('расширения найдены', s.extensions.length >= 6, s.extensions.map(x => x.id).join(','));
   shot('01-start');
 
   await send('navigate', 'wiki.wb.ru/page');
@@ -63,6 +64,51 @@ app.whenReady().then(async () => {
   const lx = s.extensions.find(x => x.id === 'loc-requests-extension');
   check('значок расширения показывает число новых', lx.badge === '1', 'badge=' + lx.badge + ' title=' + lx.title);
   shot('04-side-panel');
+
+  // Расширения с вкладками, скриптами на странице и невидимой страницей («Задачи и сметы», Weblate).
+  check('новые расширения найдены', ['smeta-extension', 'weblate-extension'].every(id => s.extensions.some(x => x.id === id)));
+  await send('openExt', 'smeta-extension');
+  await sleep(2500);
+  s = await state();
+  const sm = s.tabs.find(t => t.kind === 'ext' && t.extId === 'smeta-extension');
+  check('панель «Задачи и сметы» открыта рядом', sm && s.sideId === sm.id);
+  shot('04b-smeta');
+  const smeta = await page(/locext:\/\/smeta-extension\/sidepanel\.html/).executeJavaScript(`(async () => {
+    const out = {};
+    const tabs = await chrome.tabs.query({ url: 'https://mail.rwb.ru/*' });
+    out.found = tabs.length; out.status = tabs[0] && tabs[0].status;
+    const [r] = await chrome.scripting.executeScript({ target: { tabId: tabs[0].id }, world: 'MAIN', func: async (a, b) => document.title + a + b.n, args: ['!', { n: 7 }] });
+    out.result = r.result;
+    try { await chrome.scripting.executeScript({ target: { tabId: (await chrome.tabs.query({ url: 'https://wiki.wb.ru/*' }))[0].id }, func: () => 1 }); out.denied = false; } catch (e) { out.denied = true; }
+    await chrome.offscreen.createDocument({ url: 'offscreen.html', reasons: ['AUDIO_PLAYBACK'], justification: 'проверка' });
+    out.offscreen = (await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })).length;
+    const created = await chrome.tabs.create({ url: 'https://disk.wb.ru/apps/files/', active: false });
+    out.created = created.id > 0 && created.active === false;
+    await new Promise(res => { const f = (id, info) => { if (id === created.id && info.status === 'complete') { chrome.tabs.onUpdated.removeListener(f); res(); } }; chrome.tabs.onUpdated.addListener(f); setTimeout(res, 8000); });
+    out.loaded = (await chrome.tabs.get(created.id)).status;
+    await chrome.tabs.remove(created.id);
+    out.errors = window.__errs || 0;
+    return out;
+  })()`);
+  check('chrome.tabs.query видит сервис «Почта»', smeta.found === 1 && smeta.status === 'complete', JSON.stringify(smeta));
+  check('chrome.scripting.executeScript выполнил функцию на странице', smeta.result === 'Заглушка mail.rwb.ru!7', String(smeta.result));
+  check('скрипт не пускают на сайт вне host_permissions', smeta.denied === true);
+  check('невидимая страница (offscreen) создана', smeta.offscreen === 1);
+  check('вкладка создана в фоне, загрузилась и закрылась', smeta.created && smeta.loaded === 'complete', smeta.loaded);
+
+  await send('newTab', 'https://weblate.wb.ru/projects/');
+  await sleep(1800);
+  const wl = page(/weblate\.wb\.ru/);
+  const count = () => wl.executeJavaScript('document.querySelectorAll("*").length');
+  const n0 = await count();
+  await send('openExt', 'weblate-extension');
+  await sleep(2500);
+  const n1 = await count();
+  check('клик по значку Weblate встроил его окно в страницу', n1 > n0, n0 + ' → ' + n1);
+  shot('04c-weblate');
+  s = await state();
+  await send('closeTab', s.tabs.find(t => /weblate\.wb\.ru/.test(t.url)).id);
+  await sleep(400);
 
   await send('extOptions', 'owa-restyle');
   await sleep(1800);

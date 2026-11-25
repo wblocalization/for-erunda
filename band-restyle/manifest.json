@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Band Restyle",
+  "name": "Рестайл Band",
   "version": "0.5.1",
   "description": "Новый вид для Band (band.wb.ru): обои, стеклянные панели, темы и шрифты.",
   "permissions": [
@@ -48,7 +48,7 @@
   ],
   "options_page": "settings.html",
   "action": {
-    "default_title": "Band Restyle",
+    "default_title": "Рестайл Band",
     "default_popup": "settings.html?popup=1",
     "default_icon": {
       "16": "icons/icon16.png",

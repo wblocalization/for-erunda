@@ -72,7 +72,7 @@
   runtime.getPlatformInfo = function (cb) { return done(Promise.resolve({ os: 'win', arch: 'x86-64' }), cb); };
 
   // ---- остальное ----
-  var notifClicked = Evt(), notifClosed = Evt(), alarmEvt = Evt(), actionClicked = Evt();
+  var notifClicked = Evt(), notifClosed = Evt(), notifButton = Evt(), alarmEvt = Evt(), actionClicked = Evt(), tabUpdated = Evt(), tabRemoved = Evt();
   var alarms = {};
   function alarmFire(name) { alarmEvt._fire({ name: name, scheduledTime: Date.now() }); }
   function alarmClear(name) {
@@ -89,14 +89,43 @@
 
   if (privileged) {
     chromeApi.tabs = {
-      create: function (o, cb) { return done(call('tabs.create', [String((o && o.url) || '')]).then(function () { return { id: 1 }; }), cb); },
-      query: function (o, cb) { return done(Promise.resolve([]), cb); },
-      onUpdated: Evt(), onActivated: Evt(), onRemoved: Evt(),
+      create: function (o, cb) { return done(call('tabs.create', [o || {}]), cb); },
+      query: function (o, cb) { return done(call('tabs.query', [o || {}]), cb); },
+      get: function (id, cb) { return done(call('tabs.get', [id]), cb); },
+      getCurrent: function (cb) { return done(Promise.resolve(undefined), cb); },
+      update: function (id, props, cb) {
+        if (id && typeof id === 'object') { cb = props; props = id; id = null; }
+        return done(call('tabs.update', [id == null ? null : id, props || {}]), cb);
+      },
+      remove: function (ids, cb) { return done(call('tabs.remove', [[].concat(ids)]), cb); },
+      reload: function (id, o, cb) { cb = lastFn([id, o, cb]); return done(call('tabs.reload', [typeof id === 'number' ? id : null]), cb); },
+      onUpdated: tabUpdated, onRemoved: tabRemoved, onActivated: Evt(), onCreated: Evt(),
     };
     chromeApi.windows = {
-      getLastFocused: function (o, cb) { if (typeof o === 'function') cb = o; return done(Promise.resolve({ id: 1, focused: true }), cb); },
-      getCurrent: function (o, cb) { if (typeof o === 'function') cb = o; return done(Promise.resolve({ id: 1, focused: true }), cb); },
+      getLastFocused: function (o, cb) { if (typeof o === 'function') cb = o; return done(Promise.resolve({ id: 1, focused: true, type: 'normal' }), cb); },
+      getCurrent: function (o, cb) { if (typeof o === 'function') cb = o; return done(Promise.resolve({ id: 1, focused: true, type: 'normal' }), cb); },
+      getAll: function (o, cb) { if (typeof o === 'function') cb = o; return done(Promise.resolve([{ id: 1, focused: true, type: 'normal' }]), cb); },
+      update: function (id, o, cb) { return done(call('windows.update', [o || {}]).then(function () { return { id: 1, focused: true, type: 'normal' }; }), cb); },
       WINDOW_ID_CURRENT: -2,
+    };
+    chromeApi.scripting = {
+      executeScript: function (o, cb) {
+        o = o || {};
+        var req = { tabId: o.target && o.target.tabId, world: o.world, files: o.files || null, func: typeof o.func === 'function' ? o.func.toString() : null, args: o.args || [] };
+        return done(call('scripting.execute', [req]).then(function (v) { return [{ frameId: 0, result: v === null ? undefined : v }]; }), cb);
+      },
+    };
+    chromeApi.offscreen = {
+      createDocument: function (o, cb) { return done(call('offscreen.create', [o || {}]), cb); },
+      hasDocument: function (cb) { return done(call('offscreen.has', []), cb); },
+      closeDocument: function (cb) { return done(call('offscreen.close', []), cb); },
+      Reason: { AUDIO_PLAYBACK: 'AUDIO_PLAYBACK', CLIPBOARD: 'CLIPBOARD', DOM_PARSER: 'DOM_PARSER', BLOBS: 'BLOBS' },
+    };
+    runtime.getContexts = function (o, cb) {
+      var types = (o && o.contextTypes) || [];
+      return done(call('offscreen.has', []).then(function (has) {
+        return has && (!types.length || types.indexOf('OFFSCREEN_DOCUMENT') >= 0) ? [{ contextType: 'OFFSCREEN_DOCUMENT', documentUrl: base }] : [];
+      }), cb);
     };
     function act(patch) { return call('action', [patch]); }
     chromeApi.action = {
@@ -122,7 +151,7 @@
         return done(call('notify', [id, args[0] || {}]).then(function () { return id; }), cb);
       },
       clear: function (id, cb) { return done(call('notify.clear', [id]).then(function () { return true; }), cb); },
-      onClicked: notifClicked, onClosed: notifClosed, onButtonClicked: Evt(),
+      onClicked: notifClicked, onClosed: notifClosed, onButtonClicked: notifButton,
     };
     chromeApi.alarms = {
       create: function (name, info) {
@@ -163,7 +192,10 @@
       if (!async && !replied) { replied = true; call('respond', [p.id, null, true]).catch(function () {}); }
     } else if (name === 'notification.clicked') notifClicked._fire(p.id);
     else if (name === 'notification.closed') notifClosed._fire(p.id, true);
-    else if (name === 'action.clicked') actionClicked._fire({ id: 1 });
+    else if (name === 'notification.button') notifButton._fire(p.id, p.index);
+    else if (name === 'action.clicked') actionClicked._fire(p.tab || { id: -1, windowId: 1, url: '' });
+    else if (name === 'tabs.updated') tabUpdated._fire(p.id, p.info, p.tab);
+    else if (name === 'tabs.removed') tabRemoved._fire(p.id, { windowId: 1, isWindowClosing: false });
   });
 
   // ---- запросы к сайтам из host_permissions идут в обход проверки источника, как у настоящих расширений ----
@@ -186,9 +218,17 @@
       var headers = {};
       try { new Headers(init.headers || (input && input.headers) || {}).forEach(function (v, k) { headers[k] = v; }); } catch (e) { /* ignore */ }
       var body = init.body;
-      var ready = body == null || typeof body === 'string' ? Promise.resolve(body == null ? null : body) : new Response(body).text();
-      return ready.then(function (text) {
-        return call('fetch', [url, { method: init.method || (input && input.method) || 'GET', headers: headers, body: text }]);
+      var ready;
+      if (body == null) ready = Promise.resolve(null);
+      else if (typeof body === 'string') ready = Promise.resolve(body);
+      else {
+        // Файлы и формы уходят как есть, байтами; тип берётся из самого тела (например, граница multipart).
+        var wrap = new Response(body), ct = wrap.headers.get('content-type');
+        if (ct && !headers['content-type']) headers['content-type'] = ct;
+        ready = wrap.arrayBuffer().then(function (b) { return new Uint8Array(b); });
+      }
+      return ready.then(function (data) {
+        return call('fetch', [url, { method: init.method || (input && input.method) || 'GET', headers: headers, body: data, credentials: init.credentials || (input && input.credentials) || '' }]);
       }).then(function (r) {
         var nobody = r.status === 204 || r.status === 205 || r.status === 304;
         return new Response(nobody ? null : r.body, { status: r.status, statusText: r.statusText, headers: r.headers });

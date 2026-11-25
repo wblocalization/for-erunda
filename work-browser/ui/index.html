@@ -9,7 +9,8 @@
 <body>
 <div id="app">
   <aside id="sidebar">
-    <div id="brand" class="drag" title="Локаль">Л</div>
+    <div id="brand" class="drag" title="Локаль"><span id="logo"></span></div>
+    <div id="rail-ind"></div>
     <div id="services" class="rail"></div>
     <div class="rail-sep" id="extSep"></div>
     <div id="exts" class="rail"></div>
@@ -38,6 +39,7 @@
   </div>
 
   <div id="bars">
+    <div id="progress"><i></i></div>
     <div id="findbar" hidden>
       <input id="findInput" type="text" placeholder="Найти на странице" spellcheck="false">
       <span id="findCount"></span>
@@ -46,6 +48,7 @@
       <button class="icon-btn small" id="findClose" title="Закрыть"></button>
     </div>
     <div id="infobar" hidden>
+      <span id="infoDot"></span>
       <span id="infoText"></span>
       <button id="infoAction" class="link" hidden></button>
       <button class="icon-btn small" id="infoClose" title="Закрыть"></button>
@@ -58,8 +61,8 @@
       <div class="sheet" id="start" hidden></div>
       <div class="sheet" id="error" hidden></div>
     </section>
-    <div id="divider" hidden title="Потяните, чтобы изменить ширину"></div>
-    <section id="pane-side" class="pane" hidden>
+    <div id="divider" title="Потяните, чтобы изменить ширину"></div>
+    <section id="pane-side" class="pane">
       <div id="side-head">
         <span id="side-icon"></span>
         <span id="side-title"></span>

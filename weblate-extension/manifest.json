@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Weblate ⇄ Smartcat",
+  "short_name": "Weblate LQA",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyhdDIiL5EZvni7keJO2U08Zkmv/qb+kXSeL5znls6Y51hE9BwtPTVpJNOxHMJcoabfoSJkHumcQwbAdOlzJ3SDhwUX7MS9EUYuN6kG1YJriH0QV+K+SuG1kBE4mxwAzAhaMBKSHTPBwKTO/+8hImZoE0Dm1Ds7SNMZdgB3Irj+gzh+/Z5JnD+Fn4BTZeSuzYxt8Y5ZxOjjxOg+4JM/cSV+2KZ1nCClbU/QwXRJ8PtGi/EQWvjYY8EbJp7rNiGG0+LNUfo0pbgx9lEupR5xQheFPf2gGwVivVMvfmkLtyMd0jB2dBelPh7oNjLBctnD7hSV/9fJbOqpWG+1X6oY6L2QIDAQAB",
+  "version": "2.22.0",
+  "description": "Выгрузка непереведённого из Weblate, машперевод и файлы в Smartcat, загрузка переводов обратно с проверкой — в пару кликов.",
+  "action": {
+    "default_title": "Weblate ⇄ Smartcat",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms",
+    "notifications",
+    "offscreen"
+  ],
+  "host_permissions": [
+    "https://weblate.wb.ru/*",
+    "https://smartcat.com/*",
+    "https://*.smartcat.com/*"
+  ]
+}

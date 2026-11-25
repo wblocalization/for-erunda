@@ -8,9 +8,8 @@ const { contextBridge, ipcRenderer, webFrame } = require('electron');
   const proto = location.protocol;
   if (proto !== 'http:' && proto !== 'https:' && proto !== 'locext:') return;
 
-  let info;
-  try { info = ipcRenderer.sendSync('ext:frame-info', location.href); } catch (e) { return; }
-  if (!info) return;
+  let info = null;
+  try { info = ipcRenderer.sendSync('ext:frame-info', location.href); } catch (e) { /* без расширений */ }
 
   const listeners = {};
   ipcRenderer.on('ext:event', (e, extId, name, payload) => {
@@ -26,15 +25,31 @@ const { contextBridge, ipcRenderer, webFrame } = require('electron');
   }
 
   // Страница самого расширения (панель, настройки, фон): chrome.* прямо в странице.
-  if (info.page) {
+  if (info && info.page) {
     contextBridge.exposeInMainWorld('__locBridge', bridgeFor(info.page, info.page.kind));
     webFrame.executeJavaScript('(' + info.shim + ')(window.__locBridge);');
     return;
   }
 
-  // Контент-скрипты: у каждого расширения свой изолированный мир, как в Chrome.
-  const groups = info.scripts || [];
-  if (!groups.length) return;
+  // Скрипты расширений на сайте: у каждого расширения свой изолированный мир, как в Chrome.
+  const shimmed = {};
+  function inject(g, shim) {
+    if (g.world === 'MAIN') {
+      let last;
+      g.files.forEach(code => { last = webFrame.executeJavaScript(code); });
+      return last;
+    }
+    const sources = [];
+    if (!shimmed[g.worldId]) {
+      shimmed[g.worldId] = true;
+      // Своя политика содержимого у мира расширения: его стили и картинки не блокирует политика сайта (как в Chrome).
+      try { webFrame.setIsolatedWorldInfo(g.worldId, { name: g.extId, securityOrigin: location.origin, csp: "script-src 'self' 'unsafe-eval'; object-src 'self'" }); } catch (e) { /* ignore */ }
+      contextBridge.exposeInIsolatedWorld(g.worldId, '__locBridge', bridgeFor(g, 'content'));
+      sources.push({ code: '(' + shim + ')(globalThis.__locBridge);' });
+    }
+    g.files.forEach(code => sources.push({ code }));
+    return webFrame.executeJavaScriptInIsolatedWorld(g.worldId, sources);
+  }
   function whenRoot(fn) {
     if (document.documentElement) return fn();
     const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); fn(); } });
@@ -44,24 +59,17 @@ const { contextBridge, ipcRenderer, webFrame } = require('electron');
     if (document.readyState !== 'loading') return fn();
     document.addEventListener('DOMContentLoaded', fn, { once: true });
   }
-  const shimmed = {};
-  groups.forEach(g => {
-    const run = () => {
-      if (g.world === 'MAIN') {
-        g.files.forEach(code => webFrame.executeJavaScript(code));
-        return;
-      }
-      const sources = [];
-      if (!shimmed[g.worldId]) {
-        shimmed[g.worldId] = true;
-        // Своя политика содержимого у мира расширения: его стили и картинки не блокирует политика сайта (как в Chrome).
-        try { webFrame.setIsolatedWorldInfo(g.worldId, { name: g.extId, securityOrigin: location.origin, csp: "script-src 'self' 'unsafe-eval'; object-src 'self'" }); } catch (e) { /* ignore */ }
-        contextBridge.exposeInIsolatedWorld(g.worldId, '__locBridge', bridgeFor(g, 'content'));
-        sources.push({ code: '(' + info.shim + ')(globalThis.__locBridge);' });
-      }
-      g.files.forEach(code => sources.push({ code }));
-      webFrame.executeJavaScriptInIsolatedWorld(g.worldId, sources);
-    };
+
+  // chrome.scripting.executeScript: браузер просит выполнить скрипт расширения на этой странице.
+  ipcRenderer.on('ext:inject', (e, reqId, g) => {
+    const reply = r => { try { ipcRenderer.send('ext:inject-result', reqId, r); } catch (err) { ipcRenderer.send('ext:inject-result', reqId, { ok: true, value: null }); } };
+    Promise.resolve().then(() => inject(g, g.shim)).then(
+      v => reply({ ok: true, value: v === undefined ? null : v }),
+      err => reply({ ok: false, error: String((err && err.message) || err) }));
+  });
+
+  ((info && info.scripts) || []).forEach(g => {
+    const run = () => { try { const p = inject(g, info.shim); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ } };
     if (g.runAt === 'document_start') whenRoot(run); else whenDom(run);
   });
 })();

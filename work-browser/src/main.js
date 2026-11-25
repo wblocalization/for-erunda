@@ -15,7 +15,7 @@ app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|Lokal|lokal-b
 
 const START = 'lokal://start';
 const TAB_PREFS = () => ({ preload: path.join(__dirname, 'preload-tab.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: true });
-const COLORS = { light: { bar: '#efecf6', symbol: '#2b2440' }, dark: { bar: '#17141f', symbol: '#e9e4f5' } };
+const COLORS = { light: { bar: '#f1eefa', symbol: '#2b2440' }, dark: { bar: '#13101b', symbol: '#e9e4f5' } };
 
 let win, store, exts;
 let tabs = [], activeId = 0, sideId = 0, lastTabId = 0, seq = 0;
@@ -75,13 +75,14 @@ function wire(tab) {
     if (svc && tab.favicon && host(tab.url) === host(svc.url) && svc.favicon !== tab.favicon) { svc.favicon = tab.favicon; store.save(); }
     pushState();
   });
-  wc.on('did-start-loading', () => { tab.loading = true; pushState(); });
-  wc.on('did-stop-loading', () => { tab.loading = false; pushState(); });
+  wc.on('did-start-loading', () => { tab.loading = true; pushState(); tabEvent(tab, { status: 'loading' }); });
+  wc.on('did-stop-loading', () => { tab.loading = false; pushState(); tabEvent(tab, { status: 'complete' }); });
   wc.on('did-start-navigation', (e, url, inPlace, isMain) => { if (isMain && !inPlace && tab.error) { tab.error = null; applyLayout(); pushState(); } });
   const navigated = () => {
     tab.url = wc.getURL() || tab.url;
     touchHistory(tab);
     pushState(); saveSession();
+    tabEvent(tab, { url: tab.url });
   };
   wc.on('did-navigate', navigated);
   wc.on('did-navigate-in-page', (e, url, isMain) => { if (isMain) navigated(); });
@@ -135,9 +136,10 @@ function activateTab(id) {
   if (!tab) return;
   if (sideId === id) sideId = 0;
   activeId = id;
+  tab.seen = Date.now();
   if (tab.kind === 'tab') lastTabId = id;
   wake(tab);
-  applyLayout(); pushState(); saveSession();
+  applyLayout(); rise(tab); pushState(); saveSession();
   if (tab.url === START) { win.webContents.focus(); ui('cmd', 'focus-address'); } else tab.wc.focus();
 }
 function wake(tab) {
@@ -150,6 +152,7 @@ function closeTab(id) {
   const i = tabs.indexOf(tab);
   if (tab.kind === 'tab' && tab.url !== START) { closed.push({ url: tab.url, title: tab.title }); if (closed.length > 25) closed.shift(); }
   tabs.splice(i, 1);
+  if (exts && tab.kind !== 'ext') exts.tabRemoved(tab.id);
   if (fsTab === tab) fsTab = null;
   if (sideId === id) sideId = 0;
   win.contentView.removeChildView(tab.view);
@@ -202,6 +205,21 @@ function openExtPage(id, which, forceOpen, where) {
   else if (sideId !== tab.id) setSide(tab.id);
 }
 
+// Страница при переключении чуть «подъезжает» снизу: короткое движение вместо резкой смены.
+function rise(tab) {
+  if (store.data.settings.motion === false || fsTab || !tab.view.getVisible()) return;
+  clearInterval(tab.riseTimer);
+  const steps = [14, 9, 5, 2, 1, 0];
+  let i = 0;
+  const frame = () => {
+    const r = rects.main;
+    if (tab.id !== activeId || !r || fsTab || tab.wc.isDestroyed() || i >= steps.length) { clearInterval(tab.riseTimer); if (tab.id === activeId) applyLayout(); return; }
+    tab.view.setBounds({ x: Math.round(r.x), y: Math.round(r.y) + steps[i++], width: Math.round(r.width), height: Math.round(r.height) });
+  };
+  frame();
+  tab.riseTimer = setInterval(frame, 22);
+}
+
 function applyLayout() {
   if (!win || win.isDestroyed()) return;
   const full = win.getContentBounds();
@@ -216,6 +234,39 @@ function applyLayout() {
     } else t.view.setVisible(false);
   });
 }
+
+// ---------- вкладки глазами расширений (chrome.tabs) ----------
+const tabInfo = t => ({
+  id: t.id, windowId: 1, index: tabs.indexOf(t), url: t.pendingUrl || t.url, title: t.title, active: t.id === activeId, highlighted: t.id === activeId,
+  status: t.pendingUrl ? 'unloaded' : t.loading ? 'loading' : 'complete', lastAccessed: t.seen || 0, pinned: t.kind === 'service', incognito: false,
+});
+function tabEvent(tab, info) { if (exts && tab.kind !== 'ext') exts.tabUpdated(tab.id, info, tabInfo(tab)); }
+const EXT_TABS = {
+  list: () => tabs.filter(t => t.kind !== 'ext').map(tabInfo),
+  get: id => { const t = byId(id); return t && t.kind !== 'ext' ? Object.assign(tabInfo(t), { error: !!t.error }) : null; },
+  active: () => { const t = active(); return t && t.kind !== 'ext' ? tabInfo(t) : null; },
+  wc: id => byId(id).wc,
+  create: (url, activate) => tabInfo(createTab({ url, activate })),
+  update(id, p) {
+    const t = id == null ? active() : byId(id);
+    if (!t || t.kind === 'ext') return null;
+    if (p.url) navigate(t, p.url);
+    if (p.active && t.id !== sideId && t.id !== activeId) activateTab(t.id);
+    return tabInfo(t);
+  },
+  remove: id => { const t = byId(id); if (t && t.kind !== 'ext') closeTab(id); },
+  reload: id => { const t = id == null ? active() : byId(id); if (t) t.wc.reload(); },
+  // Дождаться, пока во вкладке появится страница (спящую вкладку сначала будим).
+  ready: id => new Promise(resolve => {
+    const t = byId(id);
+    if (!t) return resolve();
+    wake(t);
+    if (!t.wc.isLoadingMainFrame()) return resolve();
+    const done = () => { clearTimeout(timer); t.wc.off('dom-ready', done); t.wc.off('did-fail-load', done); resolve(); };
+    const timer = setTimeout(done, 30000);
+    t.wc.on('dom-ready', done); t.wc.on('did-fail-load', done);
+  }),
+};
 
 // ---------- состояние для интерфейса ----------
 function pushState() {
@@ -489,6 +540,8 @@ const UI = {
     const s = store.data.settings;
     if (patch.search && SEARCH[patch.search]) s.search = patch.search;
     if (['system', 'light', 'dark'].indexOf(patch.theme) >= 0) { s.theme = patch.theme; nativeTheme.themeSource = s.theme; }
+    if (['lilac', 'sunset', 'mint', 'ocean', 'graphite'].indexOf(patch.accent) >= 0) s.accent = patch.accent;
+    if (typeof patch.motion === 'boolean') s.motion = patch.motion;
     if (typeof patch.sideRatio === 'number') s.sideRatio = Math.max(0.2, Math.min(0.7, patch.sideRatio));
     store.save(); pushState();
   },
@@ -524,6 +577,7 @@ const UI = {
     if (store.data.extPaths.indexOf(dir) < 0) store.data.extPaths.push(dir);
     store.save(); UI.extReload();
   },
+  extNotifyButton(extId, id, index) { exts.notifyButton(String(extId), String(id), Number(index) || 0); },
   extRemove(id) {
     const x = exts.get(String(id));
     if (!x || x.bundled) return;
@@ -561,6 +615,12 @@ function createWindow() {
   };
   win.on('resized', remember); win.on('moved', remember); win.on('maximize', remember); win.on('unmaximize', remember);
   win.on('closed', () => { win = null; app.quit(); });
+}
+
+// При запуске из исходников берём из соседних папок только те расширения, что входят в сборку.
+function bundledOnly() {
+  if (app.isPackaged || process.env.LOKAL_EXT_ALL) return null;
+  try { return require('../package.json').build.extraResources.map(r => path.basename(r.to)); } catch (e) { return null; }
 }
 
 function themeChanged() {
@@ -617,7 +677,9 @@ else {
     exts = Extensions.create({
       userData: app.getPath('userData'), store,
       bundledDir: process.env.LOKAL_EXT_DIR || (app.isPackaged ? path.join(process.resourcesPath, 'extensions') : path.join(__dirname, '..', '..')),
+      only: bundledOnly(),
       host: {
+        tabs: EXT_TABS,
         openTab: url => createTab({ url }),
         openExtPage,
         changed: pushState,

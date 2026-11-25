@@ -12,6 +12,7 @@ const MIME = {
   html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8',
   css: 'text/css; charset=utf-8', json: 'application/json; charset=utf-8', png: 'image/png', jpg: 'image/jpeg',
   jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', ico: 'image/x-icon',
+  wasm: 'application/wasm', task: 'application/octet-stream',
   woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf', wav: 'audio/wav', mp3: 'audio/mpeg',
   ogg: 'audio/ogg', txt: 'text/plain; charset=utf-8', md: 'text/plain; charset=utf-8',
 };
@@ -27,10 +28,12 @@ function patternToRegExp(p) {
 const compile = list => (list || []).map(patternToRegExp).filter(Boolean);
 const matches = (res, url) => res.some(re => re.test(url));
 
-function create({ userData, bundledDir, store, host }) {
+function create({ userData, bundledDir, only, store, host }) {
   const byId = new Map();
   const pending = new Map();
   const notes = new Map();
+  const injects = new Map();
+  let injSeq = 0;
   let seq = 0;
 
   function load(dir, bundled) {
@@ -55,7 +58,8 @@ function create({ userData, bundledDir, store, host }) {
       })),
       hosts: compile((manifest.host_permissions || []).concat(manifest.permissions || [])),
       badge: { text: '', color: '#e5638f' }, title: manifest.name,
-      contexts: new Set(), files: new Map(), bg: null, worldId: 1000 + byId.size,
+      contexts: new Set(), files: new Map(), bg: null, offscreen: null, grant: null, worldId: 1000 + byId.size,
+      hasAction: !!manifest.action, activeTab: (manifest.permissions || []).indexOf('activeTab') >= 0,
       storage: new JsonFile(path.join(userData, 'ext-storage', id + '.json'), { local: {}, sync: {} }),
       mem: {},
     };
@@ -67,7 +71,7 @@ function create({ userData, bundledDir, store, host }) {
     const dirs = [];
     try {
       fs.readdirSync(bundledDir, { withFileTypes: true }).forEach(d => {
-        if (d.isDirectory() && fs.existsSync(path.join(bundledDir, d.name, 'manifest.json'))) dirs.push([path.join(bundledDir, d.name), true]);
+        if (d.isDirectory() && (!only || only.indexOf(d.name) >= 0) && fs.existsSync(path.join(bundledDir, d.name, 'manifest.json'))) dirs.push([path.join(bundledDir, d.name), true]);
       });
     } catch (e) { /* нет встроенных */ }
     (store.data.extPaths || []).forEach(p => dirs.push([p, false]));
@@ -151,7 +155,7 @@ function create({ userData, bundledDir, store, host }) {
     else {
       ext = byId.get(claimedId);
       const clean = url.split('#')[0];
-      if (!ext || !ext.scripts.some(cs => matches(cs.include, clean))) throw new Error('Нет доступа');
+      if (!ext || !(ext.contexts.has(e.sender) || ext.scripts.some(cs => matches(cs.include, clean)))) throw new Error('Нет доступа');
     }
     if (!ext || !enabled(ext)) throw new Error('Расширение отключено');
 
@@ -201,16 +205,49 @@ function create({ userData, bundledDir, store, host }) {
         const method2 = String(o.method || 'GET').toUpperCase();
         const r = await session.defaultSession.fetch(target, {
           method: method2, headers: o.headers || {}, redirect: 'follow',
-          body: method2 === 'GET' || method2 === 'HEAD' ? undefined : (o.body == null ? undefined : String(o.body)),
+          credentials: o.credentials === 'include' ? 'include' : 'omit',
+          body: method2 === 'GET' || method2 === 'HEAD' || o.body == null ? undefined : (typeof o.body === 'string' ? o.body : Buffer.from(o.body)),
         });
         const headers = {};
         r.headers.forEach((v, k) => { if (k !== 'content-encoding' && k !== 'content-length') headers[k] = v; });
         return { status: r.status, statusText: r.statusText, headers, body: new Uint8Array(await r.arrayBuffer()) };
       }
       case 'tabs.create': {
-        const target = new URL(String(args[0] || ''), ext.baseUrl).href;
+        const o = typeof args[0] === 'string' ? { url: args[0] } : (args[0] || {});
+        const target = new URL(String(o.url || ''), ext.baseUrl).href;
         if (!/^(https?|locext):/.test(target)) throw new Error('Такой адрес открыть нельзя');
-        host.openTab(target);
+        return host.tabs.create(target, o.active !== false);
+      }
+      case 'tabs.query': {
+        const o = args[0] || {};
+        const res = o.url ? compile([].concat(o.url)) : null;
+        return host.tabs.list().filter(t => (!res || matches(res, t.url.split('#')[0])) && (o.active === undefined || t.active === !!o.active));
+      }
+      case 'tabs.get': {
+        const t = host.tabs.get(Number(args[0]));
+        if (!t) throw new Error('No tab with id: ' + args[0]);
+        return t;
+      }
+      case 'tabs.update': {
+        const t = host.tabs.update(args[0] == null ? null : Number(args[0]), args[1] || {});
+        if (!t) throw new Error('No tab with id: ' + args[0]);
+        return t;
+      }
+      case 'tabs.remove': [].concat(args[0] || []).forEach(id => host.tabs.remove(Number(id))); return;
+      case 'tabs.reload': host.tabs.reload(args[0] == null ? null : Number(args[0])); return;
+      case 'windows.update': if (args[0] && args[0].focused) host.focus(); return;
+      case 'scripting.execute': return execute(ext, args[0] || {});
+      case 'offscreen.has': return !!(ext.offscreen && !ext.offscreen.isDestroyed());
+      case 'offscreen.close': closeOffscreen(ext); return;
+      case 'offscreen.create': {
+        if (ext.offscreen && !ext.offscreen.isDestroyed()) throw new Error('Only a single offscreen document may be created.');
+        const target = new URL(String((args[0] || {}).url || ''), ext.baseUrl).href;
+        if (!target.startsWith(ext.baseUrl)) throw new Error('Страница должна быть из расширения');
+        const w = ext.offscreen = new BrowserWindow({
+          show: false, width: 300, height: 200,
+          webPreferences: { preload: path.join(__dirname, 'preload-tab.js'), sandbox: true, contextIsolation: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' },
+        });
+        await w.loadURL(target);
         return;
       }
       case 'action':
@@ -231,9 +268,37 @@ function create({ userData, bundledDir, store, host }) {
     throw new Error('Не поддерживается: ' + method);
   }
 
+  // chrome.scripting.executeScript: выполнить файл или функцию расширения на странице вкладки.
+  async function execute(ext, o) {
+    const tabId = Number(o.tabId);
+    if (!host.tabs.get(tabId)) throw new Error('No tab with id: ' + o.tabId);
+    await host.tabs.ready(tabId);
+    const t = host.tabs.get(tabId);
+    if (!t) throw new Error('No tab with id: ' + o.tabId);
+    const url = t.url.split('#')[0];
+    if (t.error || !/^https?:/.test(url)) throw new Error('Cannot access contents of the page (error page).');
+    const granted = ext.grant && ext.grant.tabId === tabId && ext.grant.origin === new URL(url).origin;
+    if (!matches(ext.hosts, url) && !granted) throw new Error('Cannot access contents of the page. Extension manifest must request permission to access the respective host.');
+    const files = o.func ? ['(' + String(o.func) + ')(...' + JSON.stringify(o.args || []) + ')'] : [].concat(o.files || []).map(f => readFile(ext, String(f).replace(/^\/+/, '')));
+    if (!files.length) throw new Error('Нужно указать files или func');
+    const wc = host.tabs.wc(tabId);
+    register(ext, wc);
+    return new Promise((resolve, reject) => {
+      const id = ++injSeq;
+      const timer = setTimeout(() => { injects.delete(id); reject(new Error('Страница не ответила')); }, 600000);
+      injects.set(id, { wc, resolve, reject, timer });
+      wc.send('ext:inject', id, { extId: ext.id, manifest: ext.manifest, baseUrl: ext.baseUrl, worldId: ext.worldId, world: o.world === 'MAIN' ? 'MAIN' : 'ISOLATED', files, shim: SHIM });
+    });
+  }
+  function closeOffscreen(ext) {
+    if (ext.offscreen && !ext.offscreen.isDestroyed()) ext.offscreen.destroy();
+    ext.offscreen = null;
+  }
+
   function notify(ext, id, o) {
     const title = String(o.title || ext.name), body = [o.message, o.contextMessage].filter(Boolean).join('\n');
-    host.info({ text: title + (o.message ? ' — ' + o.message : ''), ext: ext.id });
+    const button = o.buttons && o.buttons[0] && o.buttons[0].title;
+    host.info({ text: title + (o.message ? ' — ' + o.message : ''), ext: ext.id, action: button || undefined, cmd: button ? ['extNotifyButton', ext.id, id, 0] : undefined });
     if (!Notification.isSupported()) return;
     let icon;
     try {
@@ -267,6 +332,7 @@ function create({ userData, bundledDir, store, host }) {
   function stopBackground(ext) {
     if (ext.bg && !ext.bg.isDestroyed()) ext.bg.destroy();
     ext.bg = null;
+    closeOffscreen(ext);
   }
   function backgroundHtml(ext) {
     const bg = ext.manifest.background || {};
@@ -307,6 +373,12 @@ function create({ userData, bundledDir, store, host }) {
     ipcMain.on('ext:frame-info', (e, href) => {
       try { e.returnValue = frameInfo(e.sender, String(href)); } catch (err) { console.error(err); e.returnValue = null; }
     });
+    ipcMain.on('ext:inject-result', (e, id, r) => {
+      const p = injects.get(id);
+      if (!p || p.wc !== e.sender) return;
+      injects.delete(id); clearTimeout(p.timer);
+      if (r && r.ok) p.resolve(r.value); else p.reject(new Error((r && r.error) || 'Скрипт не выполнился'));
+    });
     ipcMain.handle('ext:call', async (e, extId, method, args) => {
       try { return { ok: true, value: await call(e, String(extId), String(method), Array.isArray(args) ? args : []) }; }
       catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
@@ -329,7 +401,7 @@ function create({ userData, bundledDir, store, host }) {
       id: ext.id, name: ext.name, version: ext.version, description: ext.description, bundled: ext.bundled, dir: ext.dir,
       icon: ext.icon ? ext.baseUrl + ext.icon : '', enabled: enabled(ext),
       badge: ext.badge.text, badgeColor: ext.badge.color, title: ext.title,
-      hasPanel: !!(ext.panel || ext.popup), hasOptions: !!ext.options,
+      hasPanel: !!(ext.panel || ext.popup), hasOptions: !!ext.options, hasAction: ext.hasAction,
       sites: (ext.manifest.content_scripts || []).flatMap(cs => cs.matches || []).filter((v, i, a) => a.indexOf(v) === i),
     })),
     pageUrl(id, which) {
@@ -348,7 +420,17 @@ function create({ userData, bundledDir, store, host }) {
       if (on) startBackground(ext); else stopBackground(ext);
       host.changed();
     },
-    clicked(id) { const ext = byId.get(id); if (ext) emit(ext, 'action.clicked', {}); },
+    // Клик по значку расширения без панели: расширение получает текущую вкладку и доступ к ней (activeTab).
+    clicked(id) {
+      const ext = byId.get(id);
+      if (!ext || !enabled(ext)) return;
+      const tab = host.tabs.active();
+      if (tab && ext.activeTab && /^https?:/.test(tab.url)) ext.grant = { tabId: tab.id, origin: new URL(tab.url).origin };
+      emit(ext, 'action.clicked', { tab });
+    },
+    tabUpdated(id, info, tab) { byId.forEach(ext => { if (enabled(ext)) emit(ext, 'tabs.updated', { id, info, tab }); }); },
+    tabRemoved(id) { byId.forEach(ext => { if (enabled(ext)) emit(ext, 'tabs.removed', { id }); }); },
+    notifyButton(extId, id, index) { const ext = byId.get(extId); if (ext) emit(ext, 'notification.button', { id, index }); },
     flush() { byId.forEach(ext => ext.storage.flush()); },
   };
 }

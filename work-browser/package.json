@@ -1,7 +1,7 @@
 {
   "name": "lokal-browser",
   "productName": "Lokal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Локаль — рабочий браузер: закреплённые сервисы, вторая панель и свои расширения из папки.",
   "main": "src/main.js",
   "private": true,
@@ -26,19 +26,55 @@
     "extraResources": [
       {
         "from": "../owa-restyle",
-        "to": "extensions/owa-restyle"
+        "to": "extensions/owa-restyle",
+        "filter": [
+          "**/*",
+          "!test/**",
+          "!node_modules/**",
+          "!package.json",
+          "!.gitignore",
+          "!screenshot*.png",
+          "!apps-script/**"
+        ]
       },
       {
         "from": "../band-restyle",
-        "to": "extensions/band-restyle"
+        "to": "extensions/band-restyle",
+        "filter": [
+          "**/*",
+          "!test/**",
+          "!node_modules/**",
+          "!package.json",
+          "!.gitignore",
+          "!screenshot*.png",
+          "!apps-script/**"
+        ]
       },
       {
-        "from": "../tracker-restyle",
-        "to": "extensions/tracker-restyle"
+        "from": "../smeta-extension",
+        "to": "extensions/smeta-extension",
+        "filter": [
+          "**/*",
+          "!test/**",
+          "!node_modules/**",
+          "!package.json",
+          "!.gitignore",
+          "!screenshot*.png",
+          "!apps-script/**"
+        ]
       },
       {
-        "from": "../loc-requests-extension",
-        "to": "extensions/loc-requests-extension"
+        "from": "../weblate-extension",
+        "to": "extensions/weblate-extension",
+        "filter": [
+          "**/*",
+          "!test/**",
+          "!node_modules/**",
+          "!package.json",
+          "!.gitignore",
+          "!screenshot*.png",
+          "!apps-script/**"
+        ]
       }
     ],
     "win": {

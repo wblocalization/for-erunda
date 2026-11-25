@@ -8,6 +8,7 @@ let dragging = false;    // тянем разделитель панелей
 let addrDirty = false;
 let settingsTab = 'services', settingsRedraw = null;
 let infoTimer = null;
+let fading = false, fadeTimer = null;   // окно поверх плавно закрывается — страницы пока не возвращаем
 
 const ICON = {
   back: '<path d="M10 3 5 8l5 5"/>', forward: '<path d="m6 3 5 5-5 5"/>',
@@ -24,6 +25,7 @@ const ICON = {
   trash: '<path d="M3.5 5h9M6.5 5V3.5h3V5M5 5l.5 8h5L11 5"/>',
   globe: '<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11"/>',
   pin: '<path d="M8 2v7M4.5 9h7M8 9v5M5.5 2h5"/>',
+  logo: '<rect x="2.2" y="3.4" width="11.6" height="9.2" rx="2"/><path d="M9.6 3.4v9.2"/><circle cx="5.9" cy="8" r=".9" fill="currentColor"/>',
 };
 const svg = n => '<svg viewBox="0 0 16 16" aria-hidden="true">' + ICON[n] + '</svg>';
 
@@ -58,61 +60,129 @@ const tabTitle = t => t.title || (t.start ? 'Новая вкладка' : t.url)
 const prettyUrl = u => String(u).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
 
 // ---------- отрисовка ----------
+// Обновляет список на месте: старые элементы остаются (их анимации не сбрасываются), новые въезжают, лишние уезжают.
+function sync(parent, items, make, update, animate) {
+  const old = new Map();
+  [...parent.children].forEach(c => { if (!c._leaving) old.set(c._key, c); });
+  let prev = null;
+  items.forEach(it => {
+    let el = old.get(it.id);
+    if (el) old.delete(it.id);
+    else {
+      el = make(it); el._key = it.id;
+      if (animate && parent._ready) { el.classList.add('enter'); requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('enter'))); }
+    }
+    update(el, it);
+    const ref = prev ? prev.nextSibling : parent.firstChild;
+    if (ref !== el) parent.insertBefore(el, ref);
+    prev = el;
+  });
+  old.forEach(el => {
+    if (!animate) return el.remove();
+    el._leaving = true; el.classList.add('leave');
+    setTimeout(() => el.remove(), 280);
+  });
+  parent._ready = true;
+}
+
 function render() {
-  document.documentElement.classList.toggle('dark', !!S.dark);
-  renderTabs(); renderRail(); renderToolbar(); renderPanes();
+  const root = document.documentElement;
+  root.classList.toggle('dark', !!S.dark);
+  root.classList.toggle('still', S.settings.motion === false);
+  root.dataset.accent = S.settings.accent || 'lilac';
+  renderTabs(); renderRail(); renderToolbar(); renderPanes(); renderProgress();
   if (overlay === 'settings' && settingsRedraw) settingsRedraw();
   report();
 }
 
 function renderTabs() {
-  $('tabs').replaceChildren(...S.tabs.filter(t => t.kind === 'tab').map(t => {
-    const el = h('div', {
-      class: 'tab' + (t.id === S.activeId ? ' active' : '') + (t.id === S.sideId ? ' side' : ''), title: tabTitle(t), role: 'tab', tabIndex: 0,
-      onclick: () => api.send('activate', t.id),
-      onauxclick: e => { if (e.button === 1) api.send('closeTab', t.id); },
-      oncontextmenu: e => { e.preventDefault(); api.send('menu', 'tab', t.id); },
-      onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') api.send('activate', t.id); },
-    },
-      h('span', { class: 'ico' }, t.loading ? h('span', { class: 'spin' }) : t.favicon ? iconEl(t.favicon, tabTitle(t)) : h('span', { icon: t.start ? 'plus' : 'globe' })),
-      h('span', { class: 'title' }, tabTitle(t)),
-      h('button', { class: 'x', icon: 'x', title: 'Закрыть (Ctrl+W)', onclick: e => { e.stopPropagation(); api.send('closeTab', t.id); } }));
-    return el;
-  }));
+  sync($('tabs'), S.tabs.filter(t => t.kind === 'tab'), t => h('div', {
+    class: 'tab', role: 'tab', tabIndex: 0,
+    onclick: () => api.send('activate', t.id),
+    onauxclick: e => { if (e.button === 1) api.send('closeTab', t.id); },
+    oncontextmenu: e => { e.preventDefault(); api.send('menu', 'tab', t.id); },
+    onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') api.send('activate', t.id); },
+  }, h('span', { class: 'ico' }), h('span', { class: 'title' }),
+    h('button', { class: 'x', icon: 'x', title: 'Закрыть (Ctrl+W)', onclick: e => { e.stopPropagation(); api.send('closeTab', t.id); } })),
+  (el, t) => {
+    el.classList.toggle('active', t.id === S.activeId);
+    el.classList.toggle('side', t.id === S.sideId);
+    const title = tabTitle(t);
+    if (el.title !== title) { el.title = title; el.children[1].textContent = title; }
+    const sig = t.loading ? 'spin' : (t.favicon || (t.start ? '+' : 'o'));
+    if (el._sig !== sig) {
+      el._sig = sig;
+      el.children[0].replaceChildren(t.loading ? h('span', { class: 'spin' }) : t.favicon ? iconEl(t.favicon, title) : h('span', { icon: t.start ? 'plus' : 'globe' }));
+    }
+  }, true);
 }
 
 function renderRail() {
-  $('services').replaceChildren(...S.services.map((s, i) => {
-    const t = S.tabs.find(x => x.serviceId === s.id);
-    return h('button', {
-      class: 'rail-item' + (t && t.id === S.activeId ? ' active' : '') + (t && t.id === S.sideId ? ' side' : '') + (t ? ' loaded' : ''),
-      title: s.name + (i < 9 ? ' (Alt+' + (i + 1) + ')' : '') + '\nCtrl+клик — открыть рядом',
-      onclick: e => api.send('openService', s.id, e.ctrlKey || e.metaKey ? 'side' : 'main'),
-      onauxclick: e => { if (e.button === 1) api.send('openService', s.id, 'side'); },
-      oncontextmenu: e => { e.preventDefault(); api.send('menu', 'service', s.id); },
-    }, iconEl(s.favicon, s.name));
-  }));
-  const list = S.extensions.filter(x => x.hasPanel || x.hasOptions);
+  sync($('services'), S.services, s => h('button', {
+    class: 'rail-item',
+    onclick: e => api.send('openService', s.id, e.ctrlKey || e.metaKey ? 'side' : 'main'),
+    onauxclick: e => { if (e.button === 1) api.send('openService', s.id, 'side'); },
+    oncontextmenu: e => { e.preventDefault(); api.send('menu', 'service', s.id); },
+  }, h('span', { class: 'pic' })),
+  (el, s) => {
+    const i = S.services.indexOf(s), t = S.tabs.find(x => x.serviceId === s.id);
+    el.classList.toggle('active', !!t && t.id === S.activeId);
+    el.classList.toggle('side', !!t && t.id === S.sideId);
+    el.classList.toggle('loaded', !!t);
+    el.title = s.name + (i < 9 ? ' (Alt+' + (i + 1) + ')' : '') + '\nCtrl+клик — открыть рядом';
+    const sig = (s.favicon || '') + '|' + s.name;
+    if (el._sig !== sig) { el._sig = sig; el.firstChild.replaceChildren(iconEl(s.favicon, s.name)); }
+  }, true);
+
+  const list = S.extensions.filter(x => x.hasPanel || x.hasOptions || x.hasAction);
   $('extSep').hidden = !list.length;
-  $('exts').replaceChildren(...list.map(x => {
+  sync($('exts'), list, x => h('button', {
+    class: 'rail-item',
+    onclick: () => {
+      const now = S.extensions.find(y => y.id === x.id) || x;
+      if (!now.enabled) return api.send('menu', 'ext', x.id);
+      api.send(now.hasPanel || now.hasAction ? 'openExt' : 'extOptions', x.id);
+    },
+    oncontextmenu: e => { e.preventDefault(); api.send('menu', 'ext', x.id); },
+  }, h('span', { class: 'pic' })),
+  (el, x) => {
     const t = S.tabs.find(y => y.kind === 'ext' && y.extId === x.id);
-    return h('button', {
-      class: 'rail-item' + (t && t.id === S.activeId ? ' active' : '') + (t && t.id === S.sideId ? ' side' : '') + (x.enabled ? '' : ' off'),
-      title: x.title || x.name,
-      onclick: () => { if (!x.enabled) return api.send('menu', 'ext', x.id); api.send(x.hasPanel ? 'openExt' : 'extOptions', x.id); },
-      oncontextmenu: e => { e.preventDefault(); api.send('menu', 'ext', x.id); },
-    }, iconEl(x.icon, x.name), x.badge && x.enabled ? h('span', { class: 'badge', style: 'background:' + x.badgeColor }, x.badge) : null);
-  }));
+    el.classList.toggle('active', !!t && t.id === S.activeId);
+    el.classList.toggle('side', !!t && t.id === S.sideId);
+    el.classList.toggle('off', !x.enabled);
+    el.title = x.title || x.name;
+    if (el._sig !== x.icon) { el._sig = x.icon; el.firstChild.replaceChildren(iconEl(x.icon, x.name)); }
+    const badge = x.enabled && x.badge ? x.badge + '|' + x.badgeColor : '';
+    if (el._badge !== badge) {
+      el._badge = badge;
+      const old = el.querySelector('.badge');
+      if (old) old.remove();
+      if (badge) el.append(h('span', { class: 'badge', style: 'background:' + x.badgeColor }, x.badge));
+    }
+  }, true);
+  requestAnimationFrame(moveIndicator);
 }
+// Цветная полоска слева переезжает к активному значку.
+function moveIndicator() {
+  const ind = $('rail-ind'), cur = $('sidebar').querySelector('.rail-item.active:not(.leave)');
+  if (!cur) { ind.style.opacity = 0; return; }
+  const y = cur.getBoundingClientRect().top - $('sidebar').getBoundingClientRect().top + (cur.offsetHeight - 22) / 2;
+  ind.style.transform = 'translateY(' + Math.round(y) + 'px)';
+  ind.style.opacity = 1;
+}
+$('services').addEventListener('scroll', moveIndicator);
+$('exts').addEventListener('scroll', moveIndicator);
 
 function renderToolbar() {
   const a = activeTab();
   $('back').disabled = !a || !a.canBack;
   $('forward').disabled = !a || !a.canForward;
-  $('reload').innerHTML = svg(a && a.loading ? 'x' : 'reload');
+  const want = a && a.loading ? 'x' : 'reload';
+  if ($('reload')._icon !== want) { $('reload')._icon = want; $('reload').innerHTML = svg(want); }
   $('reload').title = a && a.loading ? 'Остановить' : 'Обновить (Ctrl+R)';
   if (!addrDirty || document.activeElement !== $('addr')) $('addr').value = !a || a.start ? '' : a.url;
-  $('addr-icon').innerHTML = svg(a && /^https:/.test(a.url) ? 'lock' : a && a.start ? 'search' : 'globe');
+  const glyph = a && /^https:/.test(a.url) ? 'lock' : a && a.start ? 'search' : 'globe';
+  if ($('addr-icon')._icon !== glyph) { $('addr-icon')._icon = glyph; $('addr-icon').innerHTML = svg(glyph); }
   const marked = a && S.bookmarks.some(b => b.url === a.url);
   $('star').classList.toggle('on', !!marked);
   $('star').title = marked ? 'Убрать из закладок (Ctrl+D)' : 'В закладки (Ctrl+D)';
@@ -120,48 +190,71 @@ function renderToolbar() {
   $('split').classList.toggle('on', !!S.sideId);
 }
 
+// Полоска загрузки под адресной строкой.
+function renderProgress() {
+  const el = $('progress'), a = activeTab(), on = !!(a && a.loading && !a.start);
+  if (on) el.className = 'on';
+  else if (el.className === 'on') { el.className = 'done'; setTimeout(() => { if (el.className === 'done') el.className = ''; }, 500); }
+}
+
 function renderPanes() {
   const a = activeTab(), s = sideTab();
   $('start').hidden = !(a && a.start && !a.error);
-  if (!$('start').hidden) renderStart();
+  if (!$('start').hidden) renderStart(); else $('start')._sig = null;
   $('error').hidden = !(a && a.error);
   if (a && a.error) {
-    $('error').replaceChildren(h('div', { class: 'err' },
-      h('h1', null, 'Не удалось открыть страницу'),
-      h('p', null, a.error.url || a.url),
-      h('p', null, a.error.desc + (a.error.code ? ' (' + a.error.code + ')' : '')),
-      h('div', { class: 'foot', style: 'justify-content:center' }, h('button', { class: 'btn', onclick: () => api.send('reload') }, 'Повторить'))));
-  }
-  $('pane-side').hidden = $('divider').hidden = !s;
+    const sig = a.id + '|' + a.error.url + '|' + a.error.code;
+    if ($('error')._sig !== sig) {
+      $('error')._sig = sig;
+      $('error').replaceChildren(h('div', { class: 'err' },
+        h('div', { class: 'face' }, '🛰️'),
+        h('h1', null, 'Не удалось открыть страницу'),
+        h('p', null, a.error.url || a.url),
+        h('p', null, a.error.desc + (a.error.code ? ' (' + a.error.code + ')' : '')),
+        h('div', { class: 'foot', style: 'justify-content:center' }, h('button', { class: 'btn', onclick: () => api.send('reload') }, 'Повторить'))));
+    }
+  } else $('error')._sig = null;
+  $('content').classList.toggle('split', !!s);
   if (s) {
-    $('side-icon').replaceChildren(s.favicon ? iconEl(s.favicon, tabTitle(s)) : '');
+    const sig = s.favicon + '|' + tabTitle(s);
+    if ($('side-icon')._sig !== sig) { $('side-icon')._sig = sig; $('side-icon').replaceChildren(s.favicon ? iconEl(s.favicon, tabTitle(s)) : ''); }
     $('side-title').textContent = s.error ? 'Не удалось открыть: ' + s.error.desc : tabTitle(s);
     $('sideBack').disabled = !s.canBack;
   }
   if (!dragging) $('content').style.setProperty('--side', Math.round((S.settings.sideRatio || 0.36) * 1000) / 10 + '%');
 }
 
+const greeting = () => { const hr = new Date().getHours(); return hr < 5 ? 'Доброй ночи' : hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер'; };
+const clockText = () => new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 function renderStart() {
-  const hour = new Date().getHours();
-  const hello = hour < 5 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
-  const keys = [['Ctrl+K', 'быстрый переход'], ['Ctrl+T', 'новая вкладка'], ['Ctrl+L', 'адресная строка'], ['Ctrl+\\', 'вторая панель'],
-    ['Alt+1…9', 'сервисы слева'], ['Ctrl+клик', 'открыть сервис рядом'], ['Ctrl+Shift+T', 'вернуть закрытую'], ['Ctrl+F', 'найти на странице']];
-  $('start').replaceChildren(h('div', { class: 'start' },
-    h('h1', null, hello),
-    h('p', { class: 'lead' }, 'Введите адрес или запрос в строке сверху либо выберите сервис.'),
-    h('h2', null, 'Сервисы'),
-    h('div', { class: 'tiles' }, S.services.map(s => h('button', {
-      class: 'tile', title: s.url, onclick: e => api.send('openService', s.id, e.ctrlKey ? 'side' : 'main'),
-    }, iconEl(s.favicon, s.name), h('span', { class: 'name' }, s.name)))),
-    S.bookmarks.length ? h('h2', null, 'Закладки') : null,
-    S.bookmarks.length ? h('div', { class: 'rows' }, S.bookmarks.slice(0, 30).map(b => h('button', {
-      class: 'row', onclick: () => api.send('navigate', b.url),
-      oncontextmenu: e => { e.preventDefault(); api.send('removeBookmark', b.url); },
-      title: 'Правая кнопка — убрать из закладок',
-    }, h('span', { icon: 'star' }), h('span', { class: 't' }, b.title), h('span', { class: 'u' }, prettyUrl(b.url))))) : null,
-    h('h2', null, 'Клавиши'),
-    h('div', { class: 'keys' }, keys.map(k => h('div', null, h('b', null, k[0]), k[1])))));
+  // Собираем один раз, пока не поменялись сервисы и закладки: иначе анимации перезапускались бы при каждом обновлении.
+  const sig = JSON.stringify([S.services.map(s => [s.id, s.name, s.favicon]), S.bookmarks.slice(0, 30)]);
+  if ($('start')._sig === sig) return;
+  $('start')._sig = sig;
+  const keys = [['Ctrl+K', 'быстрый переход'], ['Ctrl+T', 'новая вкладка'], ['Ctrl+\\', 'вторая панель'], ['Alt+1…9', 'сервисы'],
+    ['Ctrl+клик', 'открыть рядом'], ['Ctrl+Shift+T', 'вернуть закрытую'], ['Ctrl+F', 'поиск по странице']];
+  const hero = h('input', { type: 'text', spellcheck: false, placeholder: 'Куда отправимся?', 'aria-label': 'Адрес или поиск',
+    onkeydown: e => { if (e.key === 'Enter' && e.target.value.trim()) api.send('navigate', e.target.value); } });
+  $('start').replaceChildren(
+    h('div', { class: 'aurora' }, h('i'), h('i'), h('i')),
+    h('div', { class: 'start' },
+      h('div', { class: 'clock', id: 'clock' }, clockText()),
+      h('h1', { id: 'hello' }, greeting()),
+      h('label', { class: 'hero' }, h('span', { icon: 'search' }), hero, h('kbd', null, 'Ctrl+K — всё сразу')),
+      h('h2', null, 'Сервисы'),
+      h('div', { class: 'tiles' }, S.services.map((s, i) => h('button', {
+        class: 'tile', title: s.url, style: '--i:' + i, onclick: e => api.send('openService', s.id, e.ctrlKey ? 'side' : 'main'),
+      }, iconEl(s.favicon, s.name), h('span', { class: 'name' }, s.name)))),
+      S.bookmarks.length ? h('h2', null, 'Закладки') : null,
+      S.bookmarks.length ? h('div', { class: 'rows' }, S.bookmarks.slice(0, 30).map(b => h('button', {
+        class: 'row', onclick: () => api.send('navigate', b.url),
+        oncontextmenu: e => { e.preventDefault(); api.send('removeBookmark', b.url); },
+        title: 'Правая кнопка — убрать из закладок',
+      }, h('span', { icon: 'star' }), h('span', { class: 't' }, b.title), h('span', { class: 'u' }, prettyUrl(b.url))))) : null,
+      h('h2', null, 'Клавиши'),
+      h('div', { class: 'keys' }, keys.map(k => h('div', null, h('b', null, k[0]), k[1])))));
 }
+setInterval(() => { if ($('clock')) { $('clock').textContent = clockText(); $('hello').textContent = greeting(); } }, 15000);
 
 // ---------- где показывать страницы ----------
 let reportQueued = false;
@@ -170,7 +263,7 @@ function report() {
   reportQueued = true;
   requestAnimationFrame(() => {
     reportQueued = false;
-    const hide = !!overlay || dragging, a = activeTab();
+    const hide = !!overlay || dragging || fading, a = activeTab();
     const rect = el => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, width: r.width, height: r.height }; };
     api.send('layout', {
       main: hide || !a || a.start || a.error ? null : rect($('ph-main')),
@@ -192,24 +285,30 @@ function setShots(s) {
 // ---------- окна поверх страницы ----------
 // Страницы сайтов рисуются поверх интерфейса, поэтому на время окна их заменяет снимок.
 async function openOverlay(kind, build) {
-  if (!overlay) setShots(await api.send('snapshot'));
+  clearTimeout(fadeTimer);
+  if (!overlay && !fading) setShots(await api.send('snapshot'));
+  fading = false;
   overlay = kind;
   const d = $('dialog');
   d.className = kind;
   d.replaceChildren();
   build(d);
   $('overlay').hidden = false;
-  document.body.classList.add('dim');
+  requestAnimationFrame(() => requestAnimationFrame(() => { if (overlay) $('overlay').classList.add('open'); }));
   report();
 }
 function closeOverlay(keepFocus) {
   if (!overlay) return;
-  overlay = null; settingsRedraw = null;
-  $('overlay').hidden = true;
-  document.body.classList.remove('dim');
-  report();
-  setTimeout(() => { if (!overlay && !dragging) setShots(null); }, 160);
-  if (!keepFocus) api.send('focusPage');
+  overlay = null; settingsRedraw = null; fading = true;
+  $('overlay').classList.remove('open');
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => {
+    fading = false;
+    $('overlay').hidden = true;
+    report();
+    setTimeout(() => { if (!overlay && !dragging && !fading) setShots(null); }, 160);
+    if (!keepFocus) api.send('focusPage');
+  }, document.documentElement.classList.contains('still') ? 0 : 170);
 }
 $('overlay').addEventListener('mousedown', e => { if (e.target === $('overlay') && overlay !== 'auth') closeOverlay(); });
 
@@ -218,7 +317,7 @@ function openPalette() {
   openOverlay('palette', d => {
     const input = h('input', { class: 'pal-input', type: 'text', spellcheck: false, placeholder: 'Сервис, вкладка, закладка, адрес или запрос' });
     const list = h('div', { class: 'pal-list rows' });
-    d.append(input, list, h('div', { class: 'pal-hint' }, 'Enter — открыть · Ctrl+Enter — открыть рядом · Esc — закрыть'));
+    d.append(h('div', { class: 'pal-top' }, h('span', { icon: 'search' }), input), list, h('div', { class: 'pal-hint' }, 'Enter — открыть · Ctrl+Enter — открыть рядом · Esc — закрыть'));
     let items = [], sel = 0, token = 0;
     const go = (item, where) => { closeOverlay(true); item.run(where); };
 
@@ -239,10 +338,16 @@ function openPalette() {
       }
       return top;
     }
+    let drawn = null;
     function draw() {
-      list.replaceChildren(...items.map((it, i) => h('button', {
-        class: 'row' + (i === sel ? ' sel' : ''), onclick: e => go(it, e.ctrlKey ? 'side' : 'main'), onmousemove: () => { if (sel !== i) { sel = i; draw(); } },
-      }, it.glyph ? h('span', { class: 'glyph', icon: it.glyph }) : it.icon ? iconEl(it.icon, it.t) : letter(it.t), h('span', { class: 't' }, it.t), h('span', { class: 'u' }, it.u || ''), h('span', { class: 'k' }, it.k))));
+      if (drawn !== items) {
+        drawn = items;
+        list.classList.add('fresh');
+        list.replaceChildren(...items.map((it, i) => h('button', {
+          class: 'row', style: '--i:' + i, onclick: e => go(it, e.ctrlKey ? 'side' : 'main'), onmousemove: () => { if (sel !== i) { sel = i; draw(); } },
+        }, it.glyph ? h('span', { class: 'glyph', icon: it.glyph }) : it.icon ? iconEl(it.icon, it.t) : letter(it.t), h('span', { class: 't' }, it.t), h('span', { class: 'u' }, it.u || ''), h('span', { class: 'k' }, it.k))));
+      }
+      [...list.children].forEach((el, i) => el.classList.toggle('sel', i === sel));
       const cur = list.children[sel];
       if (cur) cur.scrollIntoView({ block: 'nearest' });
     }
@@ -316,9 +421,15 @@ function openSettings(tab) {
         h('label', { class: 'lbl', for: 'setSearch' }, 'Поиск из адресной строки'),
         h('select', { class: 'field', id: 'setSearch', style: 'max-width:260px', onchange: e => api.send('saveSettings', { search: e.target.value }) },
           S.search.map(e => h('option', { value: e.id, selected: e.id === S.settings.search }, e.name))),
+        h('h2', null, 'Цвет'),
+        h('div', { class: 'swatches' }, [['lilac', 'Сирень', '#7c3aed,#c026d3,#f472b6'], ['sunset', 'Закат', '#f0582a,#e83e8c,#8b5cf6'], ['mint', 'Мята', '#0d9f76,#0aa5c4,#6366f1'],
+          ['ocean', 'Океан', '#2563eb,#5b5bf0,#22b8cf'], ['graphite', 'Графит', '#505a6b,#6b7280,#94a3b8']].map(a => h('button', {
+          class: 'swatch' + ((S.settings.accent || 'lilac') === a[0] ? ' on' : ''), onclick: () => api.send('saveSettings', { accent: a[0] }),
+        }, h('i', { style: 'background:linear-gradient(135deg,' + a[2] + ')' }), a[1]))),
         h('h2', null, 'Оформление'),
         h('select', { class: 'field', 'aria-label': 'Оформление', style: 'max-width:260px', onchange: e => api.send('saveSettings', { theme: e.target.value }) },
           [['system', 'Как в системе'], ['light', 'Светлое'], ['dark', 'Тёмное']].map(o => h('option', { value: o[0], selected: o[0] === S.settings.theme }, o[1]))),
+        h('div', { class: 'foot' }, h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: S.settings.motion !== false, onchange: e => api.send('saveSettings', { motion: e.target.checked }) }), 'Анимации')),
         h('h2', null, 'Данные'),
         h('p', { class: 'note' }, 'Всё хранится только на этом компьютере, в папке профиля браузера.'),
         h('div', { class: 'foot' },
@@ -379,6 +490,7 @@ function closeFind() {
 [['back', 'back'], ['forward', 'forward'], ['reload', 'reload'], ['star', 'star'], ['split', 'split'], ['menu', 'menu'], ['newTab', 'plus'],
   ['addService', 'pin'], ['openSettings', 'gear'], ['findPrev', 'up'], ['findNext', 'down'], ['findClose', 'x'], ['infoClose', 'x'],
   ['sideBack', 'back'], ['sideReload', 'reload'], ['sideSwap', 'swap'], ['sideClose', 'x']].forEach(([id, icon]) => { $(id).innerHTML = svg(icon); });
+$('logo').innerHTML = svg('logo');
 
 $('back').onclick = () => api.send('back');
 $('forward').onclick = () => api.send('forward');
@@ -423,7 +535,7 @@ addr.addEventListener('keydown', e => {
     const shots = await api.send('snapshot');
     if (!down) return;
     setShots(shots);
-    dragging = true; div.classList.add('drag-on');
+    dragging = true; div.classList.add('drag-on'); $('content').classList.add('resizing');
     report();
   });
   div.addEventListener('pointermove', e => {
@@ -434,7 +546,7 @@ addr.addEventListener('keydown', e => {
   });
   const up = () => {
     if (!down) return;
-    down = false; dragging = false; div.classList.remove('drag-on');
+    down = false; dragging = false; div.classList.remove('drag-on'); $('content').classList.remove('resizing');
     if (ratio) api.send('saveSettings', { sideRatio: ratio });
     report();
     setTimeout(() => { if (!overlay && !dragging) setShots(null); }, 160);
