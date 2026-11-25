@@ -383,8 +383,10 @@ function create({ userData, bundledDir, only, store, host }) {
       try { return { ok: true, value: await call(e, String(extId), String(method), Array.isArray(args) ? args : []) }; }
       catch (err) { return { ok: false, error: String((err && err.message) || err) }; }
     });
-    byId.forEach(startBackground);
   }
+  // Фоновые части расширений запускаются чуть позже окна, чтобы не задерживать старт.
+  let bgStarted = false;
+  function startBackgrounds() { if (bgStarted) return; bgStarted = true; byId.forEach(startBackground); }
 
   function reload() {
     byId.forEach(ext => { stopBackground(ext); ext.storage.flush(); });
@@ -395,7 +397,7 @@ function create({ userData, bundledDir, only, store, host }) {
   }
 
   return {
-    start, reload,
+    start, reload, startBackgrounds,
     get: id => byId.get(id),
     list: () => [...byId.values()].map(ext => ({
       id: ext.id, name: ext.name, version: ext.version, description: ext.description, bundled: ext.bundled, dir: ext.dir,
@@ -424,6 +426,7 @@ function create({ userData, bundledDir, only, store, host }) {
     clicked(id) {
       const ext = byId.get(id);
       if (!ext || !enabled(ext)) return;
+      if (!bgStarted) { startBackgrounds(); setTimeout(() => this.clicked(id), 900); return; }   // нажали раньше, чем расширение проснулось
       const tab = host.tabs.active();
       if (tab && ext.activeTab && /^https?:/.test(tab.url)) ext.grant = { tabId: tab.id, origin: new URL(tab.url).origin };
       emit(ext, 'action.clicked', { tab });

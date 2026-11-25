@@ -16,7 +16,7 @@ try {
   const fs = require('fs');
   const cur = app.getPath('userData'), old = path.join(path.dirname(cur), 'Lokal');
   if (!process.env.LOKAL_USER_DATA && !fs.existsSync(path.join(cur, 'state.json')) && fs.existsSync(path.join(old, 'state.json'))) {
-    fs.cpSync(old, cur, { recursive: true, filter: src => !/^(lockfile|Singleton\w+)$/.test(path.basename(src)) });
+    fs.cpSync(old, cur, { recursive: true, filter: src => !/^(lockfile|Singleton\w+|Cache|Code Cache|GPUCache|DawnGraphiteCache|DawnWebGPUCache|ShaderCache|GrShaderCache|Crashpad|blob_storage)$/.test(path.basename(src)) });
   }
 } catch (e) { /* не получилось — начнём с чистого профиля */ }
 if (process.env.LOKAL_USER_DATA) app.setPath('userData', process.env.LOKAL_USER_DATA);
@@ -24,6 +24,11 @@ if (process.env.LOKAL_USER_DATA) app.setPath('userData', process.env.LOKAL_USER_
 app.userAgentFallback = app.userAgentFallback.replace(/\s(Electron|Yagodka|yagodka-browser)\/\S+/gi, '');
 
 const START = 'lokal://start';
+// Сколько занял запуск: от появления процесса до готового окна (видно в «Настройки → Общее»).
+const T0 = (process.getCreationTime && process.getCreationTime()) || Date.now();
+const startup = { main: Math.round(Date.now() - T0) };
+const mark = name => { if (startup[name] == null) startup[name] = Math.round(Date.now() - T0); };
+let restoring = false;
 const TAB_PREFS = () => ({ preload: path.join(__dirname, 'preload-tab.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: true });
 const COLORS = { light: { bar: '#f1eefa', symbol: '#2b2440' }, dark: { bar: '#13101b', symbol: '#e9e4f5' } };
 
@@ -61,7 +66,7 @@ function createTab(o) {
   const view = new WebContentsView(o.webContents ? { webContents: o.webContents } : { webPreferences: TAB_PREFS() });
   const tab = {
     id: ++seq, view, wc: view.webContents, kind: o.kind || 'tab', serviceId: o.serviceId || null, extId: o.extId || null,
-    url: o.url || START, title: o.title || '', favicon: '', loading: false, error: null, pendingUrl: null,
+    url: o.url || START, title: o.title || '', favicon: o.favicon || '', loading: false, error: null, pendingUrl: null,
   };
   view.setBackgroundColor('#ffffff');
   if (view.setBorderRadius) view.setBorderRadius(8);
@@ -295,13 +300,14 @@ function pushState() {
       activeId, sideId,
       services: d.services, lookups: d.lookups, bookmarks: d.bookmarks, settings: d.settings,
       extensions: exts.list(), search: Object.keys(SEARCH).map(k => ({ id: k, name: SEARCH[k].name })),
-      closed: closed.length, dark: nativeTheme.shouldUseDarkColors, version: app.getVersion(), platform: process.platform,
+      closed: closed.length, startup, dark: nativeTheme.shouldUseDarkColors, version: app.getVersion(), platform: process.platform,
     });
   });
 }
 function saveSession() {
+  if (restoring) return;      // пока вкладки восстанавливаются, список неполный — не затираем сохранённый
   const plain = tabs.filter(t => t.kind === 'tab' && t.url !== START);
-  store.data.session = { tabs: plain.map(t => ({ url: t.url, title: t.title })), active: Math.max(0, plain.findIndex(t => t.id === activeId)) };
+  store.data.session = { tabs: plain.map(t => ({ url: t.pendingUrl || t.url, title: t.title, favicon: t.favicon || '' })), active: Math.max(0, plain.findIndex(t => t.id === activeId)) };
   store.save();
 }
 
@@ -546,7 +552,7 @@ const MENUS = {
 
 // ---------- команды интерфейса ----------
 const UI = {
-  ready() { pushState(); },
+  ready() { mark('ready'); pushState(); },
   layout(r) { rects = { main: r && r.main, side: r && r.side }; applyLayout(); },
   async snapshot() {
     const shot = async id => {
@@ -718,7 +724,9 @@ function createWindow() {
   });
   if (w.maximized) win.maximize();
   win.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
-  win.once('ready-to-show', () => win.show());
+  win.show();          // сразу, не дожидаясь отрисовки: окно появляется мгновенно, интерфейс дорисовывается следом
+  mark('window');
+  win.webContents.once('did-finish-load', () => mark('ui'));
   win.webContents.on('before-input-event', onKey(null));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', e => e.preventDefault());
@@ -810,13 +818,28 @@ else {
       return UI[cmd](...args);
     });
 
+    mark('appReady');
     createWindow();
     exts.start();
 
-    const s = store.data.session;
-    (s.tabs || []).forEach((t, i) => createTab({ url: t.url, title: t.title, lazy: true, activate: false }));
-    const plain = tabs.filter(t => t.kind === 'tab');
-    if (plain.length) activateTab((plain[s.active] || plain[0]).id); else createTab({});
+    // Сначала только та вкладка, что была открыта: окно готово сразу. Остальные добавляются следом, по одной.
+    const saved = (store.data.session.tabs || []).filter(t => t && t.url);
+    if (!saved.length) createTab({});
+    else {
+      const act = Math.min(Math.max(0, store.data.session.active || 0), saved.length - 1);
+      restoring = true;
+      const current = createTab({ url: saved[act].url, title: saved[act].title, favicon: saved[act].favicon });
+      const rest = saved.map((t, n) => ({ t, n })).filter(x => x.n !== act);
+      const step = () => {
+        const x = rest.shift();
+        if (!x || !win) { restoring = false; saveSession(); return; }
+        const at = x.n < act ? Math.max(0, tabs.indexOf(current)) : null;      // те, что были левее, встают перед активной
+        createTab({ url: x.t.url, title: x.t.title, favicon: x.t.favicon, lazy: true, activate: false, index: at });
+        setTimeout(step, 20);
+      };
+      setTimeout(step, 250);
+    }
+    setTimeout(() => exts.startBackgrounds(), 1200);
   });
 
   app.on('login', (event, wc, details, authInfo, cb) => {

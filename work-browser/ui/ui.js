@@ -496,6 +496,9 @@ function openSettings(tab) {
           h('button', { class: 'btn danger', onclick: () => api.send('clearData') }, 'Выйти со всех сайтов…')),
         h('h2', null, 'О программе'),
         h('p', { class: 'note' }, 'Ягодка ' + S.version + ' — рабочий браузер на Chromium.'),
+        h('p', { class: 'note' }, S.startup && S.startup.ready != null
+          ? 'Последний запуск: окно через ' + (S.startup.window / 1000).toFixed(1).replace('.', ',') + ' с, готов к работе через ' + (S.startup.ready / 1000).toFixed(1).replace('.', ',') + ' с после старта программы. Если на деле ждать пришлось заметно дольше — время уходит до старта: Windows проверяет файл или распаковывает архив.'
+          : null),
       ],
     };
     function draw() {
