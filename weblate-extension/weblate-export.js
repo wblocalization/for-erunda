@@ -3303,6 +3303,7 @@
   }
   /* итог назначения людей на английский — дописываем во 2-й шаг главной */
   var homeAssignOn = false;
+  var homeAssignRun = 0;   /* номер отправки: итог назначения от прошлой отправки в строку новой не дописываем */
   function homeAssignNote(text, ok) {
     if (!homeAssignOn) return;
     var st = homeSteps[1];
@@ -4405,20 +4406,31 @@
             .filter(function (r) { return r.list.length; });
           if (asgTargets.length && asgCfg.enAsgAuto && partsOf(asgCfg).kind === 'shop' && asgRoles.length) {
             /* английский Магазинки: приглашаем отмеченных в «Люди на английский», режим — «все, кто примет» */
-            var asgChain = Promise.resolve();
+            var asgChain = Promise.resolve(), asgRun = ++homeAssignRun;
+            /* коротко, почему не назначилось — для строки итога; полный текст — в строке ниже */
+            var asgWhy = function (m) {
+              return /не нашла задач/.test(m) ? 'Smartcat ещё не создал задачи для файла'
+                : /все, кто примет/.test(m) ? 'режим «все, кто примет» не встал, приглашения отозваны'
+                : /Smartcat не подключён/.test(m) ? 'Smartcat не подключён'
+                : String(m).replace(/\s+/g, ' ').slice(0, 90);
+            };
+            var asgOne = function (tg, ro, line) {
+              line.className = 'muted';
+              line.textContent = 'Назначаю ' + tg.name + ' (' + ro.label + '): ' + ro.list.map(function (p) { return p.name; }).join(', ') + '… (до нескольких минут — Smartcat разбирает файл и считает слова)';
+              return scCall('sc-assign', { documentIds: tg.ids, projectIds: [tg.pid], stage: ro.stage, userIds: ro.list.map(function (p) { return p.id; }) }).then(function () {
+                line.className = 'ok'; line.textContent = '✓ ' + tg.name + ', ' + ro.label + ': приглашены ' + ro.list.length + ' чел., работают все, кто примет';
+                if (asgRun === homeAssignRun) homeAssignNote(tg.name + ' ' + ro.label + ' — ' + ro.list.length + ' чел.', true);
+              }, function (e) {
+                line.className = 'red'; line.textContent = '✗ ' + tg.name + ', ' + ro.label + ': ' + e.message + ' ';
+                line.appendChild(el('button', { class: 'b g s', type: 'button', text: 'Назначить ещё раз', onclick: function () { asgOne(tg, ro, line); } }));
+                if (asgRun === homeAssignRun) homeAssignNote('✗ ' + tg.name + ' ' + ro.label + ' не назначено (' + asgWhy(e.message) + ')', false);
+              });
+            };
             asgTargets.forEach(function (tg) {
               asgRoles.forEach(function (ro) {
-                var line = el('div', { class: 'muted', text: 'Назначаю ' + tg.name + ' (' + ro.label + '): ' + ro.list.map(function (p) { return p.name; }).join(', ') + '… (может занять пару минут — Smartcat считает слова)' });
+                var line = el('div', { class: 'muted' });
                 msg.appendChild(line);
-                asgChain = asgChain.then(function () {
-                  return scCall('sc-assign', { documentIds: tg.ids, projectIds: [tg.pid], stage: ro.stage, userIds: ro.list.map(function (p) { return p.id; }) }).then(function (res) {
-                    line.className = 'ok'; line.textContent = '✓ ' + tg.name + ', ' + ro.label + ': приглашены ' + ro.list.length + ' чел., работают все, кто примет';
-                    homeAssignNote(tg.name + ' ' + ro.label + ' — ' + ro.list.length + ' чел.', true);
-                  }, function (e) {
-                    line.className = 'red'; line.textContent = '✗ ' + tg.name + ', ' + ro.label + ': ' + e.message;
-                    homeAssignNote('✗ ' + tg.name + ' ' + ro.label + ' не назначено', false);
-                  });
-                });
+                asgChain = asgChain.then(function () { return asgOne(tg, ro, line); });
               });
             });
           } else if (asgTargets.length || enRes.some(function (x) { return x.ok; }) || made.some(function (p) { return p.enDocs; }))

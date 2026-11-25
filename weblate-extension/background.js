@@ -614,9 +614,11 @@ SC_HANDLERS['sc-assign'] = async (m) => {
   if (taskDocs.size) {
     if (!m.projectIds || !m.projectIds.length) throw new Error('проект работает с задачами, а id проекта не передан');
     let lastErr = null, n = 0; var taskMode_ = '', taskDiag_ = '', taskCrowd_ = null, taskN_ = 0;
-    for (let round = 0; round < 6; round++) {       // задачи появляются не сразу после загрузки файла
+    /* задачи появляются не сразу после загрузки файла: Smartcat сначала разбирает документ.
+       Ждём до ~4 минут (раньше — 30 секунд, и на свежем файле не успевало) */
+    for (let round = 0; round < 24; round++) {
       try { const r = await assignByTasks(m.projectIds, [...taskDocs], stage, m.userIds); n = r.n; taskMode_ = r.mode; taskDiag_ = r.diag; taskCrowd_ = r.crowd; taskN_ = r.tasks; lastErr = null; break; }
-      catch (e) { lastErr = e; if (!/не нашла задач/.test(String(e.message))) break; await sleep(5000); }
+      catch (e) { lastErr = e; if (!/не нашла задач/.test(String(e.message))) break; await sleep(10000); }
     }
     if (lastErr) throw lastErr;
     done.push(...Array(n).fill(0)); how = 'tasks';
