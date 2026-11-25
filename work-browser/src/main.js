@@ -11,9 +11,12 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'locext', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, corsEnabled: true, stream: true } },
 ]);
 app.setName('Yagodka');
-// На части Windows-машин (особенно виртуальных и по удалёнке) аппаратное ускорение рисует пустое окно.
-// Поэтому по умолчанию на Windows рисуем программно — надёжно везде; вернуть ускорение можно запуском с «--gpu».
-if (process.platform === 'win32' && !process.argv.includes('--gpu')) app.disableHardwareAcceleration();
+// Корпоративные антивирусы и агенты защиты внедряют свои библиотеки в чужие процессы. Неподписанный Electron
+// из-за этого роняет процесс окна (встроенная проверка целостности). Отключаем проверку — обычный приём для
+// таких сборок; без этого на рабочих машинах окно падает и остаётся пустым.
+if (process.platform === 'win32') app.commandLine.appendSwitch('disable-features', 'RendererCodeIntegrity');
+// Видеоускорение можно выключить запуском с «--software», если на какой-то машине мешает именно оно.
+if (process.argv.includes('--software')) app.disableHardwareAcceleration();
 let uiReady = false, uiReloaded = false;
 // Короткий журнал запуска рядом с профилем — чтобы было что прислать, если окно осталось пустым.
 function diag(line) {
@@ -738,7 +741,7 @@ function createWindow() {
   win.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
   win.show();          // сразу, не дожидаясь отрисовки: окно появляется мгновенно, интерфейс дорисовывается следом
   mark('window');
-  try { diag('запуск; ускорение=' + (process.platform === 'win32' && !process.argv.includes('--gpu') ? 'выкл' : 'вкл') + '; видео=' + JSON.stringify(app.getGPUFeatureStatus().gpu_compositing || '?')); } catch (e) { /* ignore */ }
+  try { diag('запуск 0.4.3; защита целостности=' + (process.platform === 'win32' ? 'выкл' : '—') + '; видео=' + JSON.stringify((app.getGPUFeatureStatus() || {}).gpu_compositing || '?')); } catch (e) { /* ignore */ }
   win.webContents.once('did-finish-load', () => { mark('ui'); diag('интерфейс загружен'); });
   // Если интерфейс не ожил (пустое окно) — один раз перезагружаем, потом подсказываем, куда смотреть.
   const watchdog = setTimeout(() => {
@@ -747,7 +750,7 @@ function createWindow() {
   }, 7000);
   win.webContents.on('did-finish-load', () => clearTimeout(watchdog));
   win.webContents.on('did-fail-load', (e, code, desc) => { diag('не загрузился интерфейс: ' + code + ' ' + desc); blankHelp(); });
-  win.webContents.on('render-process-gone', (e, d) => { diag('процесс интерфейса завершился: ' + d.reason); if (d.reason !== 'clean-exit') blankHelp(); });
+  win.webContents.on('render-process-gone', (e, d) => { diag('процесс интерфейса завершился: ' + d.reason + (d.exitCode != null ? ' код ' + d.exitCode : '')); if (d.reason !== 'clean-exit') blankHelp(); });
   win.webContents.on('before-input-event', onKey(null));
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', e => e.preventDefault());
