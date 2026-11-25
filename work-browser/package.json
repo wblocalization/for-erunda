@@ -1,0 +1,57 @@
+{
+  "name": "lokal-browser",
+  "productName": "Lokal",
+  "version": "0.1.0",
+  "description": "Локаль — рабочий браузер: закреплённые сервисы, вторая панель и свои расширения из папки.",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "electron test/run.js --no-sandbox --no-proxy-server",
+    "dist": "electron-builder --win zip --publish never"
+  },
+  "devDependencies": {
+    "electron": "45.5.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "ru.lokal.browser",
+    "productName": "Lokal",
+    "files": [
+      "src/**/*",
+      "ui/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../owa-restyle",
+        "to": "extensions/owa-restyle"
+      },
+      {
+        "from": "../band-restyle",
+        "to": "extensions/band-restyle"
+      },
+      {
+        "from": "../tracker-restyle",
+        "to": "extensions/tracker-restyle"
+      },
+      {
+        "from": "../loc-requests-extension",
+        "to": "extensions/loc-requests-extension"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "artifactName": "Lokal-${version}-win.${ext}"
+  }
+}

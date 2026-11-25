@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: locext:; style-src 'self' 'unsafe-inline'">
+<title>Локаль</title>
+<link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div id="brand" class="drag" title="Локаль">Л</div>
+    <div id="services" class="rail"></div>
+    <div class="rail-sep" id="extSep"></div>
+    <div id="exts" class="rail"></div>
+    <div class="grow drag"></div>
+    <button class="rail-btn" id="addService" title="Закрепить текущую страницу как сервис"></button>
+    <button class="rail-btn" id="openSettings" title="Настройки"></button>
+  </aside>
+
+  <header id="titlebar" class="drag">
+    <div id="tabs"></div>
+    <button id="newTab" class="icon-btn" title="Новая вкладка (Ctrl+T)"></button>
+    <div id="winctl"></div>
+  </header>
+
+  <div id="toolbar">
+    <button class="icon-btn" id="back" title="Назад (Alt+←)"></button>
+    <button class="icon-btn" id="forward" title="Вперёд (Alt+→)"></button>
+    <button class="icon-btn" id="reload" title="Обновить (Ctrl+R)"></button>
+    <div id="addr-wrap">
+      <span id="addr-icon"></span>
+      <input id="addr" type="text" spellcheck="false" autocomplete="off" placeholder="Адрес или поиск">
+      <button class="icon-btn small" id="star" title="В закладки (Ctrl+D)"></button>
+    </div>
+    <button class="icon-btn" id="split" title="Вторая панель рядом (Ctrl+\)"></button>
+    <button class="icon-btn" id="menu" title="Меню"></button>
+  </div>
+
+  <div id="bars">
+    <div id="findbar" hidden>
+      <input id="findInput" type="text" placeholder="Найти на странице" spellcheck="false">
+      <span id="findCount"></span>
+      <button class="icon-btn small" id="findPrev" title="Предыдущее"></button>
+      <button class="icon-btn small" id="findNext" title="Следующее"></button>
+      <button class="icon-btn small" id="findClose" title="Закрыть"></button>
+    </div>
+    <div id="infobar" hidden>
+      <span id="infoText"></span>
+      <button id="infoAction" class="link" hidden></button>
+      <button class="icon-btn small" id="infoClose" title="Закрыть"></button>
+    </div>
+  </div>
+
+  <main id="content">
+    <section id="pane-main" class="pane">
+      <div class="ph" id="ph-main"></div>
+      <div class="sheet" id="start" hidden></div>
+      <div class="sheet" id="error" hidden></div>
+    </section>
+    <div id="divider" hidden title="Потяните, чтобы изменить ширину"></div>
+    <section id="pane-side" class="pane" hidden>
+      <div id="side-head">
+        <span id="side-icon"></span>
+        <span id="side-title"></span>
+        <button class="icon-btn small" id="sideBack" title="Назад"></button>
+        <button class="icon-btn small" id="sideReload" title="Обновить"></button>
+        <button class="icon-btn small" id="sideSwap" title="Поменять панели местами"></button>
+        <button class="icon-btn small" id="sideClose" title="Скрыть панель"></button>
+      </div>
+      <div class="ph" id="ph-side"></div>
+    </section>
+  </main>
+</div>
+
+<div id="overlay" hidden><div id="dialog"></div></div>
+<script src="ui.js"></script>
+</body>
+</html>
